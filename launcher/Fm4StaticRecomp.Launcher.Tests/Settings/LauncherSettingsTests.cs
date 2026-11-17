@@ -45,6 +45,22 @@ public class LauncherSettingsTests
     }
 
     [Fact]
+    public void Narrator_is_on_by_default_and_the_mute_survives_save()
+    {
+        using var temp = new TempDir();
+        var path = Path.Combine(temp.Path, "launcher.toml");
+        File.WriteAllText(path, "audio_pop_fix = true\n");
+        var settings = LauncherSettings.Load(path);
+        Assert.False(settings.MuteNarrator);
+        settings.MuteNarrator = true;
+        settings.Save();
+        Assert.True(LauncherSettings.Load(path).MuteNarrator);
+        settings.MuteNarrator = false;
+        settings.Save();
+        Assert.False(LauncherSettings.Load(path).MuteNarrator);
+    }
+
+    [Fact]
     public void Music_folder_settings_survive_save_and_can_restore_originals_independently()
     {
         using var temp = new TempDir();

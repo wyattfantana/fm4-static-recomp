@@ -59,6 +59,7 @@ public static class LaunchArguments
         if (!settings.AudioPopFix && !Predates(version, new Version(0, 3, 2))) options["fm4_audio_pop_fix"] = "false";
         if (settings.KeepMusicOnCrash && !Predates(version, new Version(0, 3, 3))) options["fm4_keep_music_on_crash"] = "true";
         if (settings.LightMusicFilter && !Predates(version, new Version(0, 3, 3))) options["fm4_music_filter"] = "light";
+        if (settings.MuteNarrator && !Predates(version, new Version(0, 4, 0))) options["fm4_mute_narrator"] = "true";
         if (!Predates(version, new Version(0, 3, 2)))
         {
             if (!string.IsNullOrWhiteSpace(settings.MenuMusicFolder)) options["fm4_menu_music_folder"] = settings.MenuMusicFolder;

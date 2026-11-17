@@ -23,6 +23,7 @@ or in the launcher's SETTINGS.
 | `--fm4_audio_pop_fix=false` | AUDIO POP FIX off: the engine sounds pop where their loops start over and click when revving and shifting, as on a console. In the launcher: SETTINGS → ADVANCED → AUDIO POP FIX |
 | `--fm4_keep_music_on_crash=true` | The race music, your own music folder too, keeps playing when you crash hard; by default it stops for a few seconds, as on a console. In the launcher: SETTINGS → ADVANCED → MUSIC ON CRASH. Restart the game after changing it |
 | `--fm4_music_filter=light` | On some parts of each track the game thins out the bass of its own soundtrack (`default`); `light` keeps more of it. Your own music folders are not filtered. In the launcher: SETTINGS → ADVANCED → MUSIC FILTER. Restart the game after changing it |
+| `--fm4_mute_narrator=true` | Silences the narrator who introduces World Tour events and tracks in the menus, in every language; Jeremy Clarkson's Autovista commentary stays. Off by default. In the launcher: SETTINGS → ADVANCED → WORLD TOUR NARRATOR. Restart the game after changing it |
 | `--fm4_quick_race_laps=<1-99>` | Experimental: the number of laps of every Quick Race; `0` (default) keeps each track's own count. In the game: PC OPTIONS → GAMEPLAY → QUICK RACE LAPS ([Quick Race laps](gameplay.md#quick-race-laps-experimental)) |
 | `--fm4_menu_music_folder=<folder>` | Shuffled menu MP3/WAV playlist; empty uses original music. See [Custom soundtrack](#custom-soundtrack) |
 | `--fm4_race_music_folder=<folder>` | Shuffled race MP3/WAV playlist; empty uses original music |
@@ -164,7 +165,7 @@ the command line. Two exceptions:
   variables: the paths, `user_name`, `fm4_language`, `fm4_skip_intro`, `fh1_async_readbacks`,
   `vulkan_present_via_dxgi`, `fm4_frame_rate` (30 FPS (DIAGNOSTIC)), `fm4_show_fps`,
   `controller_vibration`, `pad_rumble_strength`,
-  `fm4_audio_compatibility`, `fm4_audio_pop_fix`, `fm4_keep_music_on_crash`, `fm4_music_filter`, the two music folders, `fullscreen`, `window_width`,
+  `fm4_audio_compatibility`, `fm4_audio_pop_fix`, `fm4_keep_music_on_crash`, `fm4_music_filter`, `fm4_mute_narrator`, the two music folders, `fullscreen`, `window_width`,
   `window_height`, `fm4_car_min_substeps` on Project Forza Plus 4, and COMPAT MODE's list. Set those in its SETTINGS, or replace one in COMMAND-LINE OPTIONS.
 
 ### Checking that an option took effect

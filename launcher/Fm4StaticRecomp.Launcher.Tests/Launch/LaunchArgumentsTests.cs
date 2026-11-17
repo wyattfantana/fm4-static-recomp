@@ -292,6 +292,21 @@ public class LaunchArgumentsTests
         else Assert.Equal(new[] { expected }, options);
     }
 
+    [Theory]
+    [InlineData(false, "0.4.0", null)]
+    [InlineData(true, "0.3.3", null)]
+    [InlineData(true, "0.4.0", "--fm4_mute_narrator=true")]
+    public void Narrator_mute_requires_opt_in_and_a_supported_version(bool mute, string version, string? expected)
+    {
+        var (layout, profile, settings, temp) = Setup();
+        using var _ = temp;
+        settings.MuteNarrator = mute;
+        var options = LaunchArguments.ForPlay(layout, version, profile, settings, new WindowsPlatform())
+            .Where(a => a.StartsWith("--fm4_mute_narrator")).ToArray();
+        if (expected is null) Assert.Empty(options);
+        else Assert.Equal(new[] { expected }, options);
+    }
+
     [Fact]
     public void An_explicit_audio_compatibility_override_wins()
     {

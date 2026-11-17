@@ -25,7 +25,7 @@ public partial class MainWindow
 
     private GraphicsSettings? _graphics;
     private string? _graphicsProblem;
-    private bool _skipIntro, _audioPopFix = true, _audioCompatibility, _keepMusicOnCrash, _lightMusicFilter, _asyncReadbacks, _presentViaDxgi, _compat, _showFps, _controllerVibration, _diagnostic30Fps, _windowed;
+    private bool _skipIntro, _audioPopFix = true, _audioCompatibility, _keepMusicOnCrash, _lightMusicFilter, _muteNarrator, _asyncReadbacks, _presentViaDxgi, _compat, _showFps, _controllerVibration, _diagnostic30Fps, _windowed;
     private (int Width, int Height) _windowSize = WindowSizes.Default;
     private int _buildJobs, _vibrationStrength = LauncherSettings.GameVibrationStrength;
     private string _language = GameLanguages.Default.Code;
@@ -69,6 +69,7 @@ public partial class MainWindow
         _audioPopFix = settings.AudioPopFix;
         _audioCompatibility = settings.AudioCompatibility;
         (_keepMusicOnCrash, _lightMusicFilter) = (settings.KeepMusicOnCrash, settings.LightMusicFilter);
+        _muteNarrator = settings.MuteNarrator;
         (_menuMusicFolder, _raceMusicFolder) = (settings.MenuMusicFolder, settings.RaceMusicFolder);
         _vibrationStrength = settings.VibrationStrength;
         _commandLineOptions = settings.CommandLineOptions;
@@ -153,6 +154,7 @@ public partial class MainWindow
                || _audioPopFix != settings.AudioPopFix
                || _audioCompatibility != settings.AudioCompatibility
                || (_keepMusicOnCrash, _lightMusicFilter) != (settings.KeepMusicOnCrash, settings.LightMusicFilter)
+               || _muteNarrator != settings.MuteNarrator
                || _menuMusicFolder != settings.MenuMusicFolder
                || _raceMusicFolder != settings.RaceMusicFolder
                || _vibrationStrength != settings.VibrationStrength
@@ -294,6 +296,9 @@ public partial class MainWindow
         SettingsBody.Children.Add(ChoiceRow("MUSIC FILTER", ["DEFAULT", "LIGHT"], _lightMusicFilter,
             "On some parts of each track the game thins out the bass of its own soundtrack. LIGHT keeps more of it. "
             + "Requires game restart.", v => _lightMusicFilter = v));
+        SettingsBody.Children.Add(ChoiceRow("WORLD TOUR NARRATOR", ["ON", "MUTED"], _muteNarrator,
+            "The voice that introduces World Tour events and tracks in the menus. MUTED silences it; Jeremy Clarkson's "
+            + "Autovista commentary stays. Requires game restart.", v => _muteNarrator = v));
         var commandLine = new TextBox { Text = _commandLineOptions, Watermark = "--name=value --other=value", Width = 420,
             HorizontalAlignment = HorizontalAlignment.Left };
         commandLine.TextChanged += (_, _) => _commandLineOptions = commandLine.Text ?? "";
@@ -575,6 +580,7 @@ public partial class MainWindow
             settings.AudioPopFix = _audioPopFix;
             settings.AudioCompatibility = _audioCompatibility;
             (settings.KeepMusicOnCrash, settings.LightMusicFilter) = (_keepMusicOnCrash, _lightMusicFilter);
+            settings.MuteNarrator = _muteNarrator;
             settings.MenuMusicFolder = _menuMusicFolder;
             settings.RaceMusicFolder = _raceMusicFolder;
             settings.VibrationStrength = _vibrationStrength;

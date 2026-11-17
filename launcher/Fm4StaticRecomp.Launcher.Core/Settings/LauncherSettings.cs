@@ -24,6 +24,7 @@ public sealed class LauncherSettings
         AudioCompatibility = _file.Get("audio_compatibility") == "true";
         KeepMusicOnCrash = _file.Get("keep_music_on_crash") == "true";
         LightMusicFilter = _file.Get("music_filter") == "light";
+        MuteNarrator = _file.Get("mute_narrator") == "true";
         MenuMusicFolder = _file.Get("menu_music_folder");
         RaceMusicFolder = _file.Get("race_music_folder");
         AsyncReadbacks = _file.Get("async_readbacks") != "false";
@@ -52,6 +53,7 @@ public sealed class LauncherSettings
     public bool AudioCompatibility { get; set; }
     public bool KeepMusicOnCrash { get; set; }
     public bool LightMusicFilter { get; set; }
+    public bool MuteNarrator { get; set; }
     public string? MenuMusicFolder { get; set; }
     public string? RaceMusicFolder { get; set; }
     public bool AsyncReadbacks { get; set; }
@@ -89,6 +91,7 @@ public sealed class LauncherSettings
         Flag("audio_compatibility", AudioCompatibility);
         Flag("keep_music_on_crash", KeepMusicOnCrash);
         Text("music_filter", LightMusicFilter ? "light" : "default");
+        Flag("mute_narrator", MuteNarrator);
         Text("menu_music_folder", MenuMusicFolder);
         Text("race_music_folder", RaceMusicFolder);
         Flag("async_readbacks", AsyncReadbacks);
