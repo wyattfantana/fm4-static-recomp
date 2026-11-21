@@ -2,6 +2,7 @@
 // BSD 3-Clause License: see LICENSE in the repository root.
 #include "main_menu.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -59,6 +60,14 @@ constexpr uint32_t kPromptButtonB = 1;
 using fm4_guest::kShowYesNo;
 using fm4_guest::kMakeScreenCallback;
 using fm4_guest::kYesNoSound;
+// The bar's prompt buttons [+0x12C, +0x130), 0x34 apart: a button's label width +0xFC, its inner group's x holder
+// +0xA4 (set with kSetElementX: an offset from where the bar lays the prompt out).
+constexpr uint32_t kPromptsBegin = 0x12C, kPromptsEnd = 0x130, kPromptStride = 0x34;
+constexpr uint32_t kPromptLabelWidth = 0xFC, kPromptInnerHolder = 0xA4, kLocalX = 0x0C;
+using fm4_guest::kSetElementX;
+// EXIT's width: the bar lays its prompts out from a fixed start, so EXIT TO DESKTOP's extra width moves them all
+// left by that much, ending where EXIT ends.
+constexpr float kShortLabelWidth = 28;
 // A screen's popup over it (CPopupMsgBox: the game's boxes and ours), 0 when there is none.
 constexpr uint32_t kScreenPopup = 0xB4;
 constexpr uint32_t kCallbackHolder = 0x20, kHolderReference = 0x1C;
@@ -171,12 +180,45 @@ bool TopLevelOf(const uint8_t* base, uint32_t splash) {
 // The bar's BACK slot says EXIT on the main menu's own menu (as short as BACK: the bar lays its prompts out
 // from a fixed start, a longer label would run past its end) (its icon the pad's BACK button while a pad
 // was used last) and the game's BACK on FREE PLAY's. Scratch goes below the caller's stack, the calls below that.
+// Every prompt's inner group at `x` (BACK's left alone when another feature places it).
+void ShiftPrompts(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t bar, bool back_too) {
+  const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
+  if (!GuestPointer(begin) || end < begin || (end - begin) / kPromptStride > 16) return;
+  float label = 0;
+  for (uint32_t p = begin; p + kPromptStride <= end; p += kPromptStride) {
+    const uint32_t button = Word(base, p);
+    if (GuestPointer(button)) {
+      float w;
+      const uint32_t bits = Word(base, button + kPromptLabelWidth);
+      std::memcpy(&w, &bits, 4);
+      label = std::max(label, w);  // the widest is EXIT TO DESKTOP
+    }
+  }
+  const float x = g_label_exit && !g_label_full ? -std::max(0.0f, label - kShortLabelWidth) : 0.0f;
+  for (uint32_t p = begin; p + kPromptStride <= end; p += kPromptStride) {
+    const uint32_t button = Word(base, p);
+    if (!GuestPointer(button)) continue;
+    if (!back_too && p + kPromptStride == end) continue;  // BACK is the last
+    const uint32_t holder = button + kPromptInnerHolder, target = Word(base, holder + 4);
+    if (!GuestPointer(target)) continue;
+    float now;
+    const uint32_t bits = Word(base, target + kLocalX);
+    std::memcpy(&now, &bits, 4);
+    if (std::fabs(now - x) < 0.5f) continue;
+    CallGuest(ctx, base, stack, kSetElementX, [&](PPCContext& c) {
+      c.r3.u64 = holder;
+      c.f1.f64 = x;
+    });
+  }
+}
+
 void SetBackPrompt(PPCContext& ctx, uint8_t* base, uint32_t caller_stack, uint32_t bar, bool exit) {
   bool full = false;
   if (exit) {
     std::lock_guard lock(g_alone_mutex);
     full = g_back_alone && g_back_alone();
   }
+  g_label_full = full;
   const bool pad = exit && g_pad_prompts;
   if (bar == g_labelled_bar && exit == g_label_exit && pad == g_label_pad && full == g_label_full) return;
   const uint32_t source = Word(base, bar + kBarSource), style = Word(base, bar + kBarStyle);
@@ -319,6 +361,7 @@ void Frame(PPCContext& ctx, uint8_t* base, uint32_t screen, uint32_t stack) {
   if (Word(base, splash + kScreenPopup) == 0 && Clock() - g_box_shown > 0.5) g_box_open = false;
   const bool top = TopLevelOf(base, splash);
   SetBackPrompt(ctx, base, stack, bar, top);
+  ShiftPrompts(ctx, base, stack - 0x140, bar, !g_label_full);
   if (g_asked.exchange(false) && top && !g_box_open) {
     g_box_open = true;
     g_box_shown = Clock();
