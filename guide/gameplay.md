@@ -92,9 +92,9 @@ anything: each still plays to its normal end.
 
 Level-up rewards, the championship result, gift cars and every other screen are unchanged.
 Off by default. After SAVE & APPLY it works from the next race, with no restart.
-## Hardcore
+## Career difficulty
 
-The **HARDCORE** rows change how the game itself plays, to make it harder. Each is off (the
+The **CAREER DIFFICULTY** rows change how the game itself plays, to make the career harder. Each is off (the
 game's own behaviour) by default, and each only ever makes a race harder.
 
 They work on the game's own data as it loads it: with an option on, the game is given an edited
