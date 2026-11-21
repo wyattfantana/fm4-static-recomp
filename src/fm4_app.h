@@ -39,6 +39,7 @@
 #include "disc2_install.h"
 #include "file_open_log.h"
 #include "game_hooks.h"
+#include "main_menu.h"
 #include "game_language.h"
 #include "guest_addresses.h"
 #include "input/controller_layout.h"
@@ -299,6 +300,14 @@ class Fm4App final : public rex::ReXApp {
       return runtime() && runtime()->graphics_system() ? runtime()->graphics_system()->presenter()
                                                        : nullptr;
     });
+    // EXIT TO DESKTOP on the main menu: YES in its box closes the window, as its close button does.
+    fm4_static_recomp::main_menu::SetQuit([this] {
+      if (rex::ui::Window* const window = this->window()) {
+        window->app_context().CallInUIThreadDeferred([this] {
+          if (rex::ui::Window* const window = this->window()) window->RequestClose();
+        });
+      }
+    });
     fm4_static_recomp::SetGraphicsPageOpener([this] {
       if (rex::ui::Window* const window = this->window()) {
         window->app_context().CallInUIThreadDeferred([this] { OpenGraphicsPage(); });
@@ -352,6 +361,7 @@ class Fm4App final : public rex::ReXApp {
     fm4_static_recomp::ShutdownCustomMusic();
     fm4_static_recomp::SetInputTick(nullptr);
     fm4_static_recomp::SetPromptTextSource(nullptr);
+    fm4_static_recomp::main_menu::SetQuit(nullptr);
     fm4_static_recomp::SetGraphicsPageOpener(nullptr);
     if (auto* const input_system =
             runtime() ? static_cast<rex::input::InputSystem*>(runtime()->input_system()) : nullptr) {
@@ -412,6 +422,7 @@ class Fm4App final : public rex::ReXApp {
       const auto device = input_system ? input_system->ActiveDevice(0) : std::nullopt;
       const bool keyboard = device && device->synthetic;
       keyboard_prompts_.store(keyboard, std::memory_order_relaxed);
+      fm4_static_recomp::main_menu::SetPadPrompts(!keyboard);
       const std::lock_guard lock(controls_mutex_);
       binding_switcher_->Update(context);
       if (input_system && prompt_swap_) {
@@ -462,6 +473,9 @@ class Fm4App final : public rex::ReXApp {
                                                    rex::input::X_INPUT_GAMEPAD_DPAD_DOWN));
           }
           UpdateQuickRestart(quick, driving, pad);
+          // The title screen passed with A on the first pad, as the player would press it; the main menu
+          // keeps the pad's B, and its BACK button asks to exit to the desktop (main_menu.h).
+          fm4_static_recomp::main_menu::FilterPad(pad);
         });
   }
 
