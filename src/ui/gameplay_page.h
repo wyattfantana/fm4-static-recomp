@@ -3,7 +3,10 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <memory>
+#include <optional>
+#include <string>
 
 #include "config/host_config.h"
 #include "ui/hostui/menu.h"
@@ -16,12 +19,20 @@ namespace fm4_static_recomp::ui {
 // SAVE & APPLY (Y) writes them and sets them at once.
 // the menu items that need Xbox LIVE (fm4_hide_online_items). SAVE & APPLY (Y) writes them and
 // sets them at once.
+// CUSTOM DECALS (fm4_custom_decals_folder, fm4_all_sponsor_decals; the paint editor takes them the
+// next time it opens). SAVE & APPLY (Y) writes them and sets them at once.
 std::unique_ptr<hostui::MenuScreen> CreateGameplayPage(config::HostConfig& config);
 // the World Tour narrator (fm4_mute_narrator). SAVE & APPLY (Y) writes them and sets them at
 // once; the narrator's voice bank already loaded from game_data_root is changed in place
 // (empty: only from the next start).
 std::unique_ptr<hostui::MenuScreen> CreateGameplayPage(config::HostConfig& config,
                                                        const std::filesystem::path& game_data_root = {});
+
+// Opens a folder chooser starting at `current` and calls `done` with the folder (nullopt when
+// cancelled), from any thread. The app sets it (a native dialog); without one the row does nothing.
+using FolderPicker = std::function<void(const std::string& current,
+                                        std::function<void(std::optional<std::string>)> done)>;
+void SetFolderPicker(FolderPicker picker);
 
 // Sets the saved values at startup, below a launch option for the same setting.
 void ApplySavedGameplaySettings(const config::HostConfig& config);

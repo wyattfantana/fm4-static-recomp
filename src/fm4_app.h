@@ -2,6 +2,7 @@
 // Copyright (c) 2026, i2kiselev (BSD 3-Clause: see LICENSE in the repository root).
 #pragma once
 
+#include "custom_decals.h"
 #include "custom_music.h"
 
 #include <algorithm>
@@ -56,6 +57,7 @@
 #include "shader_cache/disc_shaders.h"
 #include "tool_mode.h"
 #include "ui/controls_page.h"
+#include "ui/folder_dialog.h"
 #include "ui/gameplay_page.h"
 #include "ui/graphics_page.h"
 #include "ui/guest_frame_stats.h"
@@ -256,6 +258,8 @@ class Fm4App final : public rex::ReXApp {
     if (fm4_static_recomp::CurrentToolMode() == fm4_static_recomp::ToolMode::kNone) {
       fm4_static_recomp::InstallMixerOptions(paths.game_data_root);
       fm4_static_recomp::InstallNarratorMute(paths.game_data_root);
+      fm4_static_recomp::decals::InstallCustomDecals(paths.game_data_root, paths.user_data_root,
+                                                     gameplay_config_->path().parent_path());
     }
     if (fm4_static_recomp::CurrentToolMode() == fm4_static_recomp::ToolMode::kShaderCache) {
       return RunShaderCacheTool();
@@ -295,6 +299,12 @@ class Fm4App final : public rex::ReXApp {
       }
       fm4_static_recomp::ui::LimitFrameRateToDisplay(
           fm4_static_recomp::ui::DisplayRefreshHz(window->GetNativeWindowHandle()));
+      fm4_static_recomp::ui::SetFolderPicker(
+          [window](const std::string& current, std::function<void(std::optional<std::string>)> done) {
+            window->app_context().CallInUIThreadDeferred([window, current, done = std::move(done)] {
+              fm4_static_recomp::ui::ShowFolderDialog(*window, current, done);
+            });
+          });
     }
     fm4_static_recomp::StartCaptureWatcher([this]() -> rex::ui::Presenter* {
       return runtime() && runtime()->graphics_system() ? runtime()->graphics_system()->presenter()
@@ -356,6 +366,7 @@ class Fm4App final : public rex::ReXApp {
 
   void OnShutdown() override {
     fm4_static_recomp::StopNarratorMute();
+    fm4_static_recomp::decals::StopCustomDecals();
     rex::ui::UnregisterBind("bind_toggle_fullscreen");
     rex::ui::UnregisterBind("bind_game_menu");
     fm4_static_recomp::ShutdownCustomMusic();
