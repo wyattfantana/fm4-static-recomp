@@ -18,6 +18,8 @@ kPromptSourceInsert = 0x82673AD8
 kShowYesNo = 0x824EF660
 # Makes a screen callback for a box's button (holder, {screen, id}): it copies the pair.
 kMakeScreenCallback = 0x824EDDE8
+# Sets an element's x through its property holder (holder, f1).
+kSetElementX = 0x8237B428
 # The string lookup Fm4GraphicsOptionText hooks (its entry), called for the original text.
 kStringLookup = 0x823A4780
 # Assigns a text element's wide string (string, text, length), as its SetText does.
