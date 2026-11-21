@@ -577,7 +577,7 @@ MenuRow ModMenuRow(const std::shared_ptr<Draft>& draft) {
   row.label = "SHOW MODS TAB";
   row.description =
       "Shows the MODS tab next to this one, with everything added to the game: quick restart, "
-      "HARDCORE, fast post-race, custom decals, track signage and more. Turning it off only hides "
+      "career difficulty, fast post-race, custom decals, track signage and more. Turning it off only hides "
       "the tab: what you set there stays as it is.";
   row.value = [draft] { return std::string(draft->Value(kModMenu) == "true" ? "ON" : "OFF"); };
   row.adjust = [draft](int) {
