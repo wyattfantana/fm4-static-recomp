@@ -9,12 +9,14 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
 #include <rex/cvar.h>
 #include <rex/logging.h>
 
+#include "narrator_mute.h"
 #include "quick_race_laps.h"
 
 namespace fm4_static_recomp::ui {
@@ -42,6 +44,7 @@ int ButtonIndex(std::string_view name) {
   }
   return -1;
 }
+constexpr const char* kMuteNarrator = "fm4_mute_narrator";
 
 // A saved count the game takes, or nullopt.
 std::optional<int> ParseLaps(const std::string& value) {
@@ -66,12 +69,15 @@ std::string CurrentValue(const char* name) {
 
 // The page's settings: each drafted value (as fm4_* takes it) until SAVE & APPLY.
 struct Draft {
-  explicit Draft(config::HostConfig& config) : config(config) {}
+  Draft(config::HostConfig& config, std::filesystem::path game_data_root)
+      : config(config), game_data_root(std::move(game_data_root)) {}
 
   config::HostConfig& config;
   std::map<std::string, std::string> pending;  // cvar -> drafted value
   // The button QUICK RESTART goes back to when it is switched on again.
   std::string last_button;
+  std::filesystem::path game_data_root;
+  std::map<std::string, std::string> pending;  // cvar -> drafted value
   bool leave_warned = false;
   bool applied = false;
   bool save_failed = false;
@@ -117,6 +123,8 @@ struct Draft {
         config.Set(kQuickRestart, "\"" + value + "\"");
       } else if (name == kRestartTrigger) {
         config.Set(kRestartTrigger, "\"" + value + "\"");
+      } else if (name == kMuteNarrator) {
+        config.Set(kMuteNarrator, value);
       }
     }
     if (!config.Save()) {
@@ -127,6 +135,10 @@ struct Draft {
     for (const auto& [name, value] : pending) {
       rex::cvar::SetFlagByName(name, value);
       REXLOG_INFO("Gameplay page: {} = {}", name, value);
+      if (name == kMuteNarrator && !game_data_root.empty()) {
+        // The game loaded the narrator's bank as it started: it is changed where it is.
+        RequestNarratorMute(game_data_root, value == "true");
+      }
     }
     pending.clear();
     leave_warned = false;
@@ -211,18 +223,33 @@ MenuRow RestartTriggerRow(const std::shared_ptr<Draft>& draft) {
   row.enabled = [draft] { return draft->RestartOn(); };
   row.badge = [] { return LaunchOptionBadge(kRestartTrigger); };
   row.unapplied = [draft] { return draft->pending.contains(kRestartTrigger); };
+MenuRow NarratorRow(const std::shared_ptr<Draft>& draft) {
+  MenuRow row;
+  row.label = "WORLD TOUR NARRATOR";
+  row.divider_above = true;
+  row.description =
+      "The voice that introduces World Tour events and tracks in the menus. MUTED silences "
+      "it in every language; Jeremy Clarkson's Autovista commentary stays.";
+  row.value = [draft] { return std::string(draft->Value(kMuteNarrator) == "true" ? "MUTED" : "ON"); };
+  row.adjust = [draft](int) {
+    draft->Change(kMuteNarrator, draft->Value(kMuteNarrator) == "true" ? "false" : "true");
+  };
+  row.badge = [] { return LaunchOptionBadge(kMuteNarrator); };
+  row.unapplied = [draft] { return draft->pending.contains(kMuteNarrator); };
   return row;
 }
 
 }  // namespace
 
-std::unique_ptr<MenuScreen> CreateGameplayPage(config::HostConfig& config) {
-  auto draft = std::make_shared<Draft>(config);
+std::unique_ptr<MenuScreen> CreateGameplayPage(config::HostConfig& config,
+                                               const std::filesystem::path& game_data_root) {
+  auto draft = std::make_shared<Draft>(config, game_data_root);
   std::vector<MenuRow> rows;
   rows.push_back(LapsRow(draft));
   rows.push_back(QuickRestartRow(draft));
   rows.push_back(QuickRestartButtonRow(draft));
   rows.push_back(RestartTriggerRow(draft));
+  rows.push_back(NarratorRow(draft));
   auto screen = std::make_unique<MenuScreen>("GAMEPLAY", std::move(rows));
   screen->set_apply([draft] { draft->SaveAndApply(); });
   screen->set_leave([draft] {
@@ -274,6 +301,13 @@ void ApplySavedGameplaySettings(const config::HostConfig& config) {
   }
   if (const auto value = config.Get(kRestartTrigger); value && !FromCommandLine(kRestartTrigger)) {
     rex::cvar::SetFlagByName(kRestartTrigger, *value == "tap" ? "tap" : "hold");
+  if (const auto value = config.Get(kMuteNarrator); value && !FromCommandLine(kMuteNarrator)) {
+    if (*value == "true" || *value == "false") {
+      rex::cvar::SetFlagByName(kMuteNarrator, *value);
+      REXLOG_INFO("Gameplay settings: {} = {}", kMuteNarrator, *value);
+    } else {
+      REXLOG_WARN("Gameplay settings: ignored {} = {}", kMuteNarrator, *value);
+    }
   }
 }
 

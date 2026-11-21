@@ -25,6 +25,15 @@ without a RESTART is closed again and nothing else happens. Off by default; SAVE
 It only works while driving: not in menus, replays or photo mode, and not during a start
 sequence until GO has left the screen. Races started from the menus, and restarts from the
 pause menu, keep the game's full intro. The keyboard has no quick restart key.
+## World Tour narrator
+
+**WORLD TOUR NARRATOR** set to **MUTED** silences the voice that introduces each World Tour event
+and track in the career menus, in every language. Jeremy Clarkson's Autovista commentary is not
+affected. On by default; SAVE & APPLY switches it at once, no restart needed.
+
+It works on the game's narrator voice bank (`Media\audio\VO\<language>\vo.fsb`) without
+changing the file: each line is cut to a few milliseconds as the game reads the bank, and the
+bank already loaded is changed in memory when you switch it.
 
 ## Quick Race laps (experimental)
 

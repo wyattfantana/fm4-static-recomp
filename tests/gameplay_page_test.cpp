@@ -54,6 +54,7 @@ struct Page {
     rex::cvar::SetFlagByName("fm4_quick_race_laps", "0");
     rex::cvar::SetFlagByName("fm4_quick_restart", "off");
     rex::cvar::SetFlagByName("fm4_quick_restart_trigger", "hold");
+    rex::cvar::SetFlagByName("fm4_mute_narrator", "false");
   }
 
   std::string Value(size_t row = 0) const { return screen->rows()[row].value(); }
@@ -188,4 +189,32 @@ TEST_CASE("A saved QUICK RESTART button other than the D-pad sides is ignored", 
   ui::ApplySavedGameplaySettings(page.config);
   CHECK(ConfiguredQuickRestartButton() == 0);
   CHECK(page.Value(1) == "OFF");
+TEST_CASE("WORLD TOUR NARRATOR is on by default and MUTED saves and applies", "[gameplay_page]") {
+  Page page("");
+  CHECK(page.screen->rows()[1].label == "WORLD TOUR NARRATOR");
+  CHECK(page.Value(1) == "ON");
+  page.Step(1, NavCommand::kRight);
+  CHECK(page.Value(1) == "MUTED");
+  CHECK(page.screen->rows()[1].unapplied());
+  CHECK(rex::cvar::GetFlagByName("fm4_mute_narrator") == "false");
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(page.File() == "fm4_mute_narrator = true\n");
+  CHECK(rex::cvar::GetFlagByName("fm4_mute_narrator") == "true");
+  page.Step(1, NavCommand::kRight);
+  CHECK(page.Value(1) == "ON");
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(page.File() == "fm4_mute_narrator = false\n");
+  CHECK(rex::cvar::GetFlagByName("fm4_mute_narrator") == "false");
+}
+
+TEST_CASE("A saved narrator setting is applied at startup, a bad one ignored", "[gameplay_page]") {
+  {
+    Page page("fm4_mute_narrator = true\n");
+    ui::ApplySavedGameplaySettings(page.config);
+    CHECK(rex::cvar::GetFlagByName("fm4_mute_narrator") == "true");
+    CHECK(page.Value(1) == "MUTED");
+  }
+  Page page("fm4_mute_narrator = maybe\n");
+  ui::ApplySavedGameplaySettings(page.config);
+  CHECK(rex::cvar::GetFlagByName("fm4_mute_narrator") == "false");
 }

@@ -49,6 +49,7 @@
 #include "input/prompt_swap.h"
 #include "mixer_options.h"
 #include "quick_restart.h"
+#include "narrator_mute.h"
 #include "scripted_input.h"
 #include "shader_cache/cache_writer.h"
 #include "shader_cache/disc_shaders.h"
@@ -253,6 +254,7 @@ class Fm4App final : public rex::ReXApp {
     }
     if (fm4_static_recomp::CurrentToolMode() == fm4_static_recomp::ToolMode::kNone) {
       fm4_static_recomp::InstallMixerOptions(paths.game_data_root);
+      fm4_static_recomp::InstallNarratorMute(paths.game_data_root);
     }
     if (fm4_static_recomp::CurrentToolMode() == fm4_static_recomp::ToolMode::kShaderCache) {
       return RunShaderCacheTool();
@@ -344,6 +346,7 @@ class Fm4App final : public rex::ReXApp {
   }
 
   void OnShutdown() override {
+    fm4_static_recomp::StopNarratorMute();
     rex::ui::UnregisterBind("bind_toggle_fullscreen");
     rex::ui::UnregisterBind("bind_game_menu");
     fm4_static_recomp::ShutdownCustomMusic();
@@ -752,7 +755,7 @@ class Fm4App final : public rex::ReXApp {
            mouse.apply = [this] { return ApplyControls(); };
            return ui::CreateMousePage(*controls_config_, std::move(mouse));
          }},
-        {"GAMEPLAY", [this] { return ui::CreateGameplayPage(*gameplay_config_); }}};
+        {"GAMEPLAY", [this] { return ui::CreateGameplayPage(*gameplay_config_, game_data_root()); }}};
     host_ui_->Open(std::move(tabs), 0);
   }
 
