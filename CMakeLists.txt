@@ -121,6 +121,7 @@ if(FM4_BUILD_TESTS)
         tests/narrator_mute_test.cpp
         tests/gameplay_page_test.cpp
         tests/quick_restart_test.cpp
+        tests/menu_test.cpp
         src/car_dirt.cpp
         src/audio_gain.cpp
         src/dlc_licenses.cpp

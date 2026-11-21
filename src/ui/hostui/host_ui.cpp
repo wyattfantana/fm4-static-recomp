@@ -376,17 +376,17 @@ void HostUi::PacePaint() {
   next_paint_ = std::max(next_paint_ + period, now);
 }
 
-void HostUi::SwitchTab(size_t tab) {
+std::optional<bool> HostUi::SwitchTab(size_t tab) {
   if (tab == tab_ || tab >= tabs_.size() || screen_->capturing()) {
-    return;
+    return std::nullopt;
   }
   if (!screen_->MayLeave()) {
     RequestPaint();
-    return;
+    return false;
   }
   std::unique_ptr<MenuScreen> screen = tabs_[tab].create();
   if (!screen) {
-    return;
+    return std::nullopt;
   }
   screen_->Update(true);
   screen_ = std::move(screen);
@@ -395,6 +395,44 @@ void HostUi::SwitchTab(size_t tab) {
   pointer_first_.reset();
   REXLOG_INFO("Host UI: tab {}", screen_->title());
   RequestPaint();
+  return true;
+}
+
+void HostUi::SwitchTabWithSound(size_t tab, MenuSound sound) {
+  if (const auto switched = SwitchTab(tab)) {
+    PlaySound(*switched ? sound : MenuSound::kError);
+  }
+}
+
+void HostUi::PlaySound(std::optional<MenuSound> sound) {
+  if (sound && sound_) {
+    sound_(*sound);
+  }
+}
+
+HostUi::RowState HostUi::FocusedState() const {
+  RowState state;
+  state.focus = screen_->focus();
+  state.slot = screen_->slot();
+  if (state.focus < screen_->rows().size()) {
+    const MenuRow& row = screen_->rows()[state.focus];
+    if (row.value) {
+      state.value = row.value();
+    }
+    if (row.slider) {
+      state.slider = row.slider->get();
+    }
+  }
+  return state;
+}
+
+void HostUi::PlaySlideSound(int direction, bool changed) {
+  if (changed) {
+    slide_at_end_ = false;
+    PlaySound(direction < 0 ? MenuSound::kSlideDown : MenuSound::kSlideUp);
+  } else if (!std::exchange(slide_at_end_, true)) {
+    PlaySound(MenuSound::kSlideEnd);
+  }
 }
 
 void HostUi::Apply(NavCommand command) {
@@ -404,14 +442,32 @@ void HostUi::Apply(NavCommand command) {
   pointer_first_.reset();
   if (command == NavCommand::kPreviousTab || command == NavCommand::kNextTab) {
     if (tabs_.size() > 1) {
-      SwitchTab((tab_ + (command == NavCommand::kNextTab ? 1 : tabs_.size() - 1)) %
-                tabs_.size());
+      SwitchTabWithSound(
+          (tab_ + (command == NavCommand::kNextTab ? 1 : tabs_.size() - 1)) % tabs_.size(),
+          command == NavCommand::kNextTab ? MenuSound::kTabRight : MenuSound::kTabLeft);
     }
     return;
   }
+  NavOutcome outcome{.command = command, .capturing = screen_->capturing()};
+  if (screen_->focus() < screen_->rows().size()) {
+    const MenuRow& row = screen_->rows()[screen_->focus()];
+    outcome.slider = row.slider.has_value();
+    outcome.slots = bool(row.slots);
+    outcome.inert = !row.is_enabled() || screen_->status().busy || (!row.adjust && !row.slider && !row.slots);
+  }
+  const RowState before = FocusedState();
   applying_ = true;
   const MenuScreen::Result result = screen_->Handle(command);
   applying_ = false;
+  outcome.handled = result == MenuScreen::Result::kChanged;
+  outcome.left_screen = result == MenuScreen::Result::kBack;
+  if (!outcome.left_screen) {
+    const RowState after = FocusedState();
+    outcome.focus_moved = after.focus != before.focus;
+    outcome.value_changed = !outcome.focus_moved && after != before;
+    if (outcome.focus_moved) slide_at_end_ = false;  // another slider: its end sounds again
+  }
+  PlaySound(NavSound(outcome));
   if (std::exchange(close_pending_, false) || result == MenuScreen::Result::kBack) {
     Close();
     return;
@@ -443,6 +499,9 @@ void HostUi::PollPad() {
   if (!on_slider) {
     slide_owed_ = 0.0f;
   }
+  if (std::abs(int(state.gamepad.thumb_lx)) < 7849) {  // the stick let go: the next push into an end sounds again
+    slide_at_end_ = false;
+  }
   if (commands.empty() && !slide_steps) {
     return;
   }
@@ -453,8 +512,12 @@ void HostUi::PollPad() {
         if (alive.expired()) {
           return;
         }
-        if (slide_steps && is_open() && screen_->Slide(slide_steps) != MenuScreen::Result::kNone) {
-          RequestPaint();
+        if (slide_steps && is_open()) {
+          const bool changed = screen_->Slide(slide_steps) != MenuScreen::Result::kNone;
+          PlaySlideSound(slide_steps, changed);
+          if (changed) {
+            RequestPaint();
+          }
         }
         for (NavCommand command : commands) {
           Apply(command);
@@ -1165,7 +1228,7 @@ void HostUi::OnKeyDown(rex::ui::KeyEvent& e) {
   if (screen_->capturing()) {
     if (const std::string name = input::BindKeyName(key); !e.prev_state() && !name.empty()) {
       captured_key_ = int(key);
-      screen_->CaptureKey(name);
+      if (screen_->CaptureKey(name) == MenuScreen::Result::kChanged) PlaySound(MenuSound::kAccept);
       RequestPaint();
     }
     return;
@@ -1236,7 +1299,7 @@ void HostUi::OnMouseDown(rex::ui::MouseEvent& e) {
   };
   for (size_t i = 0; i < tab_rects_.size(); ++i) {
     if (inside(tab_rects_[i])) {
-      SwitchTab(i);
+      SwitchTabWithSound(i, i < tab_ ? MenuSound::kTabLeft : MenuSound::kTabRight);
       return;
     }
   }
@@ -1259,19 +1322,30 @@ void HostUi::OnMouseDown(rex::ui::MouseEvent& e) {
     const float bar_x0 = canvas_.x + (kSliderBarLeft + 2.0f) * canvas_.scale;
     const float bar_x1 = canvas_.x + (kSliderBarRight - 2.0f) * canvas_.scale;
     const float slack = 6.0f * canvas_.scale;
-    if (float(e.x()) >= bar_x0 - slack && float(e.x()) < bar_x1 + slack &&
-        screen_->SlideTo((float(e.x()) - bar_x0) / (bar_x1 - bar_x0)) !=
-            MenuScreen::Result::kNone) {
-      RequestPaint();
+    if (float(e.x()) >= bar_x0 - slack && float(e.x()) < bar_x1 + slack) {
+      const int value = screen_->rows()[focus].slider->get();
+      if (screen_->SlideTo((float(e.x()) - bar_x0) / (bar_x1 - bar_x0)) !=
+          MenuScreen::Result::kNone) {
+        slide_at_end_ = false;
+        PlaySound(screen_->rows()[focus].slider->get() < value ? MenuSound::kSlideDown
+                                                                : MenuSound::kSlideUp);
+        RequestPaint();
+      }
     }
     return;
   }
-  // Clicking a row steps it: on the left arrow backwards, anywhere else
-  // forwards.
+  // Clicking a row's arrows steps it back or on, stopping at the ends as left and right do;
+  // clicking anywhere else steps it forward, rolling over as accept does.
   const float arrow_x0 = canvas_.x + (kRowsRight - kArrowBoxWidth) * canvas_.scale;
   const float arrow_split = canvas_.x + (kRowsRight - kArrowBoxWidth * 0.5f) * canvas_.scale;
-  const bool back = float(e.x()) >= arrow_x0 && float(e.x()) < arrow_split;
-  Apply(back ? NavCommand::kLeft : NavCommand::kRight);
+  const float arrow_x1 = canvas_.x + kRowsRight * canvas_.scale;
+  if (float(e.x()) >= arrow_x0 && float(e.x()) < arrow_split) {
+    Apply(NavCommand::kLeft);
+  } else if (float(e.x()) >= arrow_split && float(e.x()) < arrow_x1) {
+    Apply(NavCommand::kRight);
+  } else {
+    Apply(NavCommand::kAccept);
+  }
 }
 
 void HostUi::OnMouseWheel(rex::ui::MouseEvent& e) {

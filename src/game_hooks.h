@@ -63,5 +63,9 @@ bool PreRaceScreenUp();
 // QUICK RESTART's short start sequence (in the parsed 321Tuning/321Cams values); false puts the
 // game's own back. False when they are not the disc's values (nothing changed).
 bool SetQuickStartSequence(bool on);
+// Plays one of the game's UI sounds: `id_address` is the guest global holding its id
+// (fm4_guest::kUiSound*). Queued from any thread; the UI thread plays it on its next text
+// update, through a UI element of the scene up then.
+void PlayUiSound(uint32_t id_address);
 
 }  // namespace fm4_static_recomp

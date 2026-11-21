@@ -90,6 +90,10 @@ struct Draft {
   void Change(const char* name, std::string value) {
     if (value == CurrentValue(name)) {
       pending.erase(name);
+  void Change(int value) {
+    if (value == Laps()) return;  // a press at the row's end
+    if (value == QuickRaceLapsSetting()) {
+      laps.reset();
     } else {
       pending[name] = std::move(value);
     }
@@ -159,6 +163,7 @@ MenuRow LapsRow(const std::shared_ptr<Draft>& draft) {
   row.value = [draft] { return LapsLabel(draft->Laps()); };
   row.adjust = [draft](int direction) {
     draft->Change(kLaps, std::to_string(std::clamp(draft->Laps() + direction, 0, kQuickRaceLapsMax)));
+    draft->Change(std::clamp(draft->Laps() + std::clamp(direction, -1, 1), 0, kQuickRaceLapsMax));
   };
   row.badge = [] { return LaunchOptionBadge(kLaps); };
   row.unapplied = [draft] { return draft->pending.contains(kLaps); };
