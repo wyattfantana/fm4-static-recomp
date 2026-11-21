@@ -537,11 +537,11 @@ MenuRow SignageRow(const std::shared_ptr<Draft>& draft) {
 
 MenuRow ModMenuRow(const std::shared_ptr<Draft>& draft) {
   MenuRow row;
-  row.label = "MOD MENU";
+  row.label = "SHOW MODS TAB";
   row.description =
-      "Shows the MOD MENU tab next to this one, with the options that change the game the most: "
-      "HARDCORE, fast post-race, custom decals and track signage. Turning it off only hides the "
-      "tab: what you set there stays as it is.";
+      "Shows the MODS tab next to this one, with everything added to the game: quick restart, "
+      "HARDCORE, fast post-race, custom decals, track signage and more. Turning it off only hides "
+      "the tab: what you set there stays as it is.";
   row.value = [draft] { return std::string(draft->Value(kModMenu) == "true" ? "ON" : "OFF"); };
   row.adjust = [draft](int) {
     draft->Change(kModMenu, draft->Value(kModMenu) == "true" ? "false" : "true");

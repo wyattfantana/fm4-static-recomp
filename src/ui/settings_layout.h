@@ -40,38 +40,40 @@ struct SettingsLayout {
   SettingsTab mod;
 };
 
-inline constexpr size_t kActiveSettingsLayout = 0;
+inline constexpr size_t kActiveSettingsLayout = 2;
 
 inline const std::array<SettingsLayout, 3>& SettingsLayouts() {
   using enum SettingRow;
   static const std::array<SettingsLayout, 3> layouts = {{
-      // 0. GAME for the everyday settings; the mod features behind a MOD MENU switch at its bottom.
+      // 0. GAME kept to the game's own; all of our features in MODS, grouped by what they change.
       {{"GAME",
-        {{"RACING", {kQuickRaceLaps, kQuickRestart, kQuickRestartButton, kQuickRestartTrigger}},
-         {"MENUS", {kOnlineItems, kNarrator}},
+        {{"RACING", {kQuickRaceLaps}},
          {"MODS", {kModMenu}}}},
-       {"MOD MENU",
-        {{"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue}},
-         {"AFTER THE RACE", {kFastPostRace}},
+       {"MODS",
+        {{"RACING", {kQuickRestart, kQuickRestartButton, kQuickRestartTrigger}},
+         {"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue}},
+         {"MENUS/UI", {kFastPostRace, kOnlineItems, kNarrator}},
          {"LIVERY", {kDecalsFolder, kAllSponsors}},
          {"TRACKS", {kTrackSignage}}}}},
-      // 1. Everything on one tab, under headings.
+      // 1. Quick restart stays with the everyday race settings; the rest in MODS.
       {{"GAME",
         {{"RACING", {kQuickRaceLaps, kQuickRestart, kQuickRestartButton, kQuickRestartTrigger}},
-         {"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue}},
-         {"MENUS", {kOnlineItems, kNarrator, kFastPostRace}},
-         {"LIVERY", {kDecalsFolder, kAllSponsors}},
-         {"TRACKS", {kTrackSignage}}}},
-       {"", {}}},
-      // 2. Two tabs by what they touch: racing, and the garage and menus.
-      {{"RACING",
-        {{nullptr, {kQuickRaceLaps, kQuickRestart, kQuickRestartButton, kQuickRestartTrigger}},
-         {"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue}},
-         {"AFTER THE RACE", {kFastPostRace}}}},
-       {"GARAGE",
-        {{"LIVERY", {kDecalsFolder, kAllSponsors}},
-         {"TRACKS", {kTrackSignage}},
-         {"MENUS", {kOnlineItems, kNarrator}}}}},
+         {"MODS", {kModMenu}}}},
+       {"MODS",
+        {{"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue}},
+         {"MENUS/UI", {kFastPostRace, kOnlineItems, kNarrator}},
+         {"PAINT", {kDecalsFolder, kAllSponsors}},
+         {"TRACKS", {kTrackSignage}}}}},
+      // 2. MODS named after the game's own menus, so each is where a player expects it.
+      {{"GAME",
+        {{"RACING", {kQuickRaceLaps}},
+         {"MODS", {kModMenu}}}},
+       {"MODS",
+        {{"GO RACE", {kQuickRestart, kQuickRestartButton, kQuickRestartTrigger}},
+         {"CAREER", {kRacePayouts, kRepairCosts, kResaleValue}},
+         {"MENUS/UI", {kFastPostRace, kOnlineItems, kNarrator}},
+         {"PAINT", {kDecalsFolder, kAllSponsors}},
+         {"TRACKS", {kTrackSignage}}}}},
   }};
   return layouts;
 }
