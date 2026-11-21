@@ -190,7 +190,39 @@ float LabelsWidth(const uint8_t* base, uint32_t bar) {
   }
   return total;
 }
-float g_labelled_width = 0;  // the labels' measured width when BACK's prompt was last put in (Frame thread)
+// The bar's prompts sit in one group, right-aligned to the bar's end by its x (holder +0x14C): the bar sets it from
+// the labels' widths when it lays out, before a new label is measured, so EXIT TO DESKTOP would run past the end
+// by its extra width. The group is put where the widths it really shows place it: its last prompt's x, icon and
+// label (prompt: x +0x0C of its element, icon width +0xF8, label width +0xFC).
+constexpr uint32_t kGroupHolder = 0x14C, kPromptIconWidth = 0xF8, kLocalX = 0x0C;
+using fm4_guest::kSetElementX;
+
+float FloatAt(const uint8_t* base, uint32_t address) {
+  float value;
+  const uint32_t bits = Word(base, address);
+  std::memcpy(&value, &bits, 4);
+  return value;
+}
+
+void AlignGroup(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t bar) {
+  const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
+  if (!GuestPointer(begin) || end <= begin || (end - begin) / kPromptStride > 16) return;
+  const uint32_t last = Word(base, end - kPromptStride);
+  const uint32_t holder = bar + kGroupHolder, group = Word(base, holder + 4);
+  if (!GuestPointer(last) || !GuestPointer(group)) return;
+  const uint32_t view = Word(base, last + 0x54), list = GuestPointer(view) ? Word(base, view + 0x10) : 0;
+  const uint32_t element = GuestPointer(list) ? Word(base, list + 4) : 0;
+  if (!GuestPointer(element) || Word(base, group + 4) == 0) return;
+  const float icon = FloatAt(base, last + kPromptIconWidth), label = FloatAt(base, last + kPromptLabelWidth);
+  if (!(icon > 0) || !(label > 0)) return;
+  const float want = -(FloatAt(base, element + kLocalX) + icon + label);
+  const uint32_t group_element = Word(base, group + 4);
+  if (std::fabs(FloatAt(base, group_element + kLocalX) - want) < 0.5f) return;
+  CallGuest(ctx, base, stack, kSetElementX, [&](PPCContext& c) {
+    c.r3.u64 = holder;
+    c.f1.f64 = want;
+  });
+}
 
 bool LaidOut(const uint8_t* base, uint32_t bar) {
   const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
@@ -355,12 +387,8 @@ void Frame(PPCContext& ctx, uint8_t* base, uint32_t screen, uint32_t stack) {
   if (Word(base, splash + kScreenPopup) == 0 && Clock() - g_box_shown > 0.5) g_box_open = false;
   const bool top = TopLevelOf(base, splash);
   if (LaidOut(base, bar)) {
-    // A new label is measured only after the bar has laid it out (by the old one's width): once its width is in,
-    // the prompt goes in again, so the bar lays the prompts out from the label it really shows.
-    const float width = LabelsWidth(base, bar);
-    if (bar == g_labelled_bar && std::fabs(width - g_labelled_width) >= 0.5f) g_labelled_bar = 0;
     SetBackPrompt(ctx, base, stack, bar, top);
-    g_labelled_width = width;
+    AlignGroup(ctx, base, stack - 0x140, bar);
   }
   if (g_asked.exchange(false) && top && !g_box_open) {
     g_box_open = true;
