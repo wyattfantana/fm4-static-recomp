@@ -42,5 +42,9 @@ bool ScreenAnswer(uint32_t screen, uint32_t id);
 void SetQuit(std::function<void()> quit);
 // A pad was used last: the main menu's prompt shows the pad's BACK button (the keyboard's shows Esc).
 void SetPadPrompts(bool pad);
+// Whether the bar shows its BACK alone, with no key icons and no SELECT (another feature clearing the bar, as the
+// mouse does): asked each frame. Alone, the prompt says EXIT TO DESKTOP in full; beside SELECT and the icons, EXIT
+// (the full text runs past the bar's end there). Without one set, always EXIT.
+void SetBackAloneSource(std::function<bool()> alone);
 
 }  // namespace fm4_static_recomp::main_menu
