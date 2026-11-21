@@ -25,6 +25,7 @@
 #include <rex/logging.h>
 
 #include "narrator_mute.h"
+#include "hardcore.h"
 #include "quick_race_laps.h"
 
 REXCVAR_DEFINE_BOOL(fm4_hide_online_items, false, "Forza Motorsport 4",
@@ -96,6 +97,45 @@ constexpr const char* kFastPostRace = "fm4_fast_post_race";
 // FAST POST-RACE's values, in the order the row steps through them, and their labels.
 constexpr std::pair<std::string_view, std::string_view> kFastPostRaceValues[] = {
     {"off", "OFF"}, {"globe", "GLOBE"}, {"all", "GLOBE + XP BARS"}};
+
+// The HARDCORE settings (src/hardcore.h), each a few choices, the first the default.
+struct Choice {
+  const char* value;  // as fm4_* takes it
+  const char* label;
+};
+struct HardcoreSetting {
+  const char* name;
+  const char* label;
+  const char* description;
+  std::vector<Choice> choices;
+};
+
+const std::vector<HardcoreSetting>& HardcoreSettings() {
+  static const std::vector<HardcoreSetting> settings = {
+      {"fm4_race_payouts", "RACE PAYOUTS",
+       "The credits a race pays by distance, and the bonuses for each car maker's affinity "
+       "level. -25% and -50% pay that much less than the default (a mod's own included). From "
+       "the next start.",
+       {{"100", "DEFAULT"}, {"75", "-25%"}, {"50", "-50%"}}},
+      {"fm4_repair_costs", "REPAIR COSTS",
+       "What damage costs you from a race's winnings. +100% and +200% make each damaged part "
+       "cost that much more than the default, a part at most the whole winnings. From the "
+       "next start.",
+       {{"100", "DEFAULT"}, {"200", "+100%"}, {"300", "+200%"}}},
+      {"fm4_resale_value", "RESALE VALUE",
+       "What selling a car pays. -25% and -50% pay that much less than the default (a mod's "
+       "own included). From the next start.",
+       {{"100", "DEFAULT"}, {"75", "-25%"}, {"50", "-50%"}}},
+  };
+  return settings;
+}
+
+int ChoiceIndex(const HardcoreSetting& setting, std::string_view value) {
+  for (size_t i = 0; i < setting.choices.size(); ++i) {
+    if (setting.choices[i].value == value) return int(i);
+  }
+  return -1;
+}
 
 // A saved count the game takes, or nullopt.
 std::optional<int> ParseLaps(const std::string& value) {
@@ -208,6 +248,12 @@ struct Draft {
           config.Remove(kFastPostRace);
         } else {
           config.Set(kFastPostRace, value);
+      } else {
+        // A HARDCORE setting; the default (100) is no line at all.
+        if (value == "100") {
+          config.Remove(name);
+        } else {
+          config.Set(name, value);
         }
       }
     }
@@ -468,6 +514,37 @@ MenuRow FastPostRaceRow(const std::shared_ptr<Draft>& draft) {
   };
   row.badge = [] { return LaunchOptionBadge(kFastPostRace); };
   row.unapplied = [draft] { return draft->pending.contains(kFastPostRace); };
+MenuRow Heading(const char* label) {
+  MenuRow row;
+  row.label = label;
+  row.heading = true;
+  row.divider_above = true;
+  return row;
+}
+
+MenuRow HardcoreRow(const std::shared_ptr<Draft>& draft, const HardcoreSetting& setting) {
+  MenuRow row;
+  row.label = setting.label;
+  row.description = setting.description;
+  row.value = [draft, &setting] {
+    const int index = ChoiceIndex(setting, draft->Value(setting.name));
+    return std::string(setting.choices[size_t(std::max(index, 0))].label);
+  };
+  row.adjust = [draft, &setting](int direction) {
+    const int count = int(setting.choices.size());
+    const int index = (std::max(ChoiceIndex(setting, draft->Value(setting.name)), 0) + direction + count) % count;
+    draft->Change(setting.name, setting.choices[size_t(index)].value);
+  };
+  // The game's data was read as it started.
+  row.note = [draft, &setting] {
+    // A launch option wins at every start; a value out of range counts as the default.
+    if (FromCommandLine(setting.name)) return std::string();
+    const int now = std::max(ChoiceIndex(setting, draft->Value(setting.name)), 0);
+    const int at_start = std::max(ChoiceIndex(setting, HardcoreSettingAtStart(setting.name)), 0);
+    return std::string(now != at_start ? "From the next start." : "");
+  };
+  row.badge = [&setting] { return LaunchOptionBadge(setting.name); };
+  row.unapplied = [draft, &setting] { return draft->pending.contains(setting.name); };
   return row;
 }
 
@@ -497,6 +574,8 @@ std::unique_ptr<MenuScreen> CreateGameplayPage(config::HostConfig& config) {
   rows.push_back(DecalsFolderRow(draft, picked));
   rows.push_back(AllSponsorsRow(draft));
   rows.push_back(FastPostRaceRow(draft));
+  rows.push_back(Heading("HARDCORE"));
+  for (const HardcoreSetting& setting : HardcoreSettings()) rows.push_back(HardcoreRow(draft, setting));
   auto screen = std::make_unique<MenuScreen>("GAMEPLAY", std::move(rows));
   screen->set_apply([draft] { draft->SaveAndApply(); });
   screen->set_leave([draft] {
@@ -563,6 +642,13 @@ void ApplySavedGameplaySettings(const config::HostConfig& config) {
       REXLOG_INFO("Gameplay settings: {} = {}", kQuickRestart, *value);
     } else {
       REXLOG_WARN("Gameplay settings: ignored {} = {}", kQuickRestart, *value);
+  for (const HardcoreSetting& setting : HardcoreSettings()) {
+    const auto value = config.Get(setting.name);
+    if (!value || FromCommandLine(setting.name)) continue;
+    if (ChoiceIndex(setting, *value) >= 0 && rex::cvar::SetFlagByName(setting.name, *value)) {
+      REXLOG_INFO("Gameplay settings: {} = {}", setting.name, *value);
+    } else {
+      REXLOG_WARN("Gameplay settings: ignored {} = {}", setting.name, *value);
     }
   }
   if (const auto value = config.Get(kRestartTrigger); value && !FromCommandLine(kRestartTrigger)) {

@@ -21,6 +21,9 @@ namespace fm4_static_recomp::ui {
 // sets them at once.
 // CUSTOM DECALS (fm4_custom_decals_folder, fm4_all_sponsor_decals; the paint editor takes them the
 // next time it opens). SAVE & APPLY (Y) writes them and sets them at once.
+// the HARDCORE options (fm4_race_payouts, fm4_repair_costs, fm4_resale_value;
+// from the next start). SAVE & APPLY (Y) writes them and
+// sets them at once.
 std::unique_ptr<hostui::MenuScreen> CreateGameplayPage(config::HostConfig& config);
 // the World Tour narrator (fm4_mute_narrator). SAVE & APPLY (Y) writes them and sets them at
 // once; the narrator's voice bank already loaded from game_data_root is changed in place

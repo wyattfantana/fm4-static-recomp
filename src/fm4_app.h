@@ -41,6 +41,7 @@
 #include "file_open_log.h"
 #include "game_hooks.h"
 #include "main_menu.h"
+#include "hardcore.h"
 #include "game_language.h"
 #include "guest_addresses.h"
 #include "input/controller_layout.h"
@@ -260,6 +261,7 @@ class Fm4App final : public rex::ReXApp {
       fm4_static_recomp::InstallNarratorMute(paths.game_data_root);
       fm4_static_recomp::decals::InstallCustomDecals(paths.game_data_root, paths.user_data_root,
                                                      gameplay_config_->path().parent_path());
+      fm4_static_recomp::InstallHardcoreOptions(paths.game_data_root);
     }
     if (fm4_static_recomp::CurrentToolMode() == fm4_static_recomp::ToolMode::kShaderCache) {
       return RunShaderCacheTool();

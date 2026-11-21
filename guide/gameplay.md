@@ -75,3 +75,27 @@ anything: each still plays to its normal end.
 
 Level-up rewards, the championship result, gift cars and every other screen are unchanged.
 Off by default. After SAVE & APPLY it works from the next race, with no restart.
+## Hardcore
+
+The **HARDCORE** rows change how the game itself plays, to make it harder. Each is off (the
+game's own behaviour) by default, and each only ever makes a race harder.
+
+They work on the game's own data as it loads it: with an option on, the game is given an edited
+copy of its database (`Media\db\gamedb.slt`) or of its tunables
+(`Media\GameTunableSettings\GameTunableSettings.ini`). The files on disk are never changed,
+so turning an option off again, or a mod changing those files, works as before. The game reads
+them as it starts, so a change takes effect **from the next start**; the row says so until then.
+
+Each change is made to the values the files hold, so on top of a mod's own (PFP4's lower
+payouts, for one). A value stays in as many digits as the file gives it: where that is one
+decimal (the disc's resale value, 0.5), -25% and -50% come out a little smaller, about -20% and
+-40%. The log names each option applied with the values it wrote.
+
+With RACE PAYOUTS on, the World Tour event panel still shows the event's full payout; the
+earnings screen after a race pays the reduced amount.
+
+| Setting | Choices | What changes |
+|---|---|---|
+| **RACE PAYOUTS** | DEFAULT, -25%, -50% | The credits a race pays by distance (`RaceWinnings\CreditsPerMile`) and the car makers' affinity level bonuses (`AffinityLevelDef`) |
+| **REPAIR COSTS** | DEFAULT, +100%, +200% | The share of a race's winnings each damaged part costs (`RaceWinnings\DmgPenalty*`), a part at most the whole winnings |
+| **RESALE VALUE** | DEFAULT, -25%, -50% | What selling a car pays (`CarValueScales\SellValueScale`, `RestockingValueScale`) |
