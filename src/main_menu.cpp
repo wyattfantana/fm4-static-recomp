@@ -194,7 +194,7 @@ void SetBackPrompt(PPCContext& ctx, uint8_t* base, uint32_t caller_stack, uint32
   g_labelled_bar = bar, g_label_exit = exit, g_label_pad = pad, g_label_full = full;
   const uint32_t stack = caller_stack - 0x140, holders = stack;  // scratch [stack, stack + 8)
   MakeLabel(ctx, base, stack, holders,
-            !exit ? Word(base, kBackStringKey) : full ? uint32_t(kExitToDesktopStringKey) : uint32_t(kExitStringKey));
+            exit ? uint32_t(kExitToDesktopStringKey) : Word(base, kBackStringKey));
   const uint32_t icon = pad ? BackIconPath(style) : Word(base, kPromptIcons + 4 * (style * 11 + kPromptButtonB));
   const uint32_t gap_bits = Word(base, kPromptGap);
   float gap;
