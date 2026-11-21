@@ -96,6 +96,14 @@ inline constexpr int kAdjustCycle = 2;
 // stop at the ends, kAdjustCycle rolls over. A current index of -1 (no value matches) goes to
 // the first value, or the last going left.
 int StepIndex(int current, int count, int direction);
+// A picture the description panel shows above the row's text (a preview), with a caption
+// under it. The pixels are shared, so the same picture keeps its texture between frames.
+struct MenuPicture {
+  std::shared_ptr<const std::vector<uint8_t>> rgba;  // width * height * 4
+  uint32_t width = 0;
+  uint32_t height = 0;
+  std::string caption;
+};
 
 // One row of a host menu: a label and a value beside it, changed with
 // `adjust` (-1, +1 or kAdjustCycle), or a slider stepped by one. The focused row's
@@ -125,6 +133,8 @@ struct MenuRow {
   std::function<void(size_t slot)> clear;
   // What clear does to the slot, for the button help; empty when it does nothing there.
   std::function<std::string(size_t slot)> clear_label;
+  // Pictures for the description panel (previews), or none.
+  std::function<std::vector<MenuPicture>()> pictures;
 
   bool is_enabled() const { return !heading && (!enabled || enabled()); }
 };
@@ -165,11 +175,17 @@ class MenuScreen {
   bool has_apply() const { return bool(apply_); }
   // Asked as back or close would leave the screen; false keeps it open.
   void set_leave(std::function<bool()> leave) { leave_ = std::move(leave); }
+  // Back only (not closing the menu or changing tab): true when the page took it, going up a level of its own.
+  void set_back(std::function<bool()> back) { back_ = std::move(back); }
   void set_status(std::function<MenuStatus()> status) { status_ = std::move(status); }
   MenuStatus status() const { return status_ ? status_() : MenuStatus{}; }
   size_t focus() const { return focus_; }
   // Moves the focus to `index` if that row is enabled.
   bool SetFocus(size_t index);
+  // Swaps the screen's rows for others (a page that opens a list in place, as a track's boards),
+  // focusing `focus` or the first enabled row. Rows may call it from their own actions: the swap
+  // waits until the command that called it has finished.
+  void ReplaceRows(std::vector<MenuRow> rows, size_t focus = SIZE_MAX);
   // The focused slot of a row of slots; the same column on every row.
   size_t slot() const { return slot_; }
   void SetSlot(size_t slot) { slot_ = slot; }
@@ -202,11 +218,15 @@ class MenuScreen {
   std::function<void(bool closing)> update_;
   std::function<void()> apply_;
   std::function<bool()> leave_;
+  std::function<bool()> back_;
   std::function<MenuStatus()> status_;
   MenuKeyCapture capture_;
   std::vector<std::string> headers_;
   size_t focus_ = 0;
   size_t slot_ = 0;
+  std::optional<std::pair<std::vector<MenuRow>, size_t>> pending_rows_;
+  Result HandleNow(NavCommand command);
+  void ApplyPendingRows();
 };
 
 // Turns polled pad state into navigation commands with the usual menu key

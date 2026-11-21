@@ -53,6 +53,8 @@
 #include "mixer_options.h"
 #include "quick_restart.h"
 #include "narrator_mute.h"
+#include "track_signage_runtime.h"
+#include "ui/signage_page.h"
 #include "scripted_input.h"
 #include "shader_cache/cache_writer.h"
 #include "shader_cache/disc_shaders.h"
@@ -217,6 +219,10 @@ class Fm4App final : public rex::ReXApp {
     } else {
       REXLOG_ERROR("Gameplay settings: cannot read {}", gameplay_config_->path().string());
     }
+    // Track signage: pictures of <state>\signage on the track boards PC OPTIONS > SIGNAGE chose
+    // (config\signage.toml). Its own file: it starts whether or not gameplay.toml could be read.
+    fm4_static_recomp::signage::Start(gameplay_config_->path().parent_path().parent_path() / "signage",
+                                      game_data_root(), gameplay_config_->path().parent_path() / "signage.toml");
   }
 
   bool WantsPresentation() const override {
@@ -370,6 +376,7 @@ class Fm4App final : public rex::ReXApp {
     fm4_static_recomp::StopNarratorMute();
     fm4_static_recomp::decals::StopCustomDecals();
     fm4_static_recomp::StopFastPostRace();
+    fm4_static_recomp::signage::Stop();
     rex::ui::UnregisterBind("bind_toggle_fullscreen");
     rex::ui::UnregisterBind("bind_game_menu");
     fm4_static_recomp::ShutdownCustomMusic();
@@ -802,7 +809,8 @@ class Fm4App final : public rex::ReXApp {
            mouse.apply = [this] { return ApplyControls(); };
            return ui::CreateMousePage(*controls_config_, std::move(mouse));
          }},
-        {"GAMEPLAY", [this] { return ui::CreateGameplayPage(*gameplay_config_, game_data_root()); }}};
+        {"GAMEPLAY", [this] { return ui::CreateGameplayPage(*gameplay_config_, game_data_root()); }},
+        {"SIGNAGE", [] { return ui::CreateSignagePage(); }}};
     host_ui_->Open(std::move(tabs), 0);
   }
 

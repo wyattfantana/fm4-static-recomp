@@ -166,6 +166,31 @@ MenuScreen::MenuScreen(std::string title, std::vector<MenuRow> rows)
   }
 }
 
+void MenuScreen::ReplaceRows(std::vector<MenuRow> rows, size_t focus) {
+  pending_rows_ = std::make_pair(std::move(rows), focus);
+}
+
+void MenuScreen::ApplyPendingRows() {
+  if (!pending_rows_) {
+    return;
+  }
+  auto [rows, focus] = std::move(*pending_rows_);
+  pending_rows_.reset();
+  rows_ = std::move(rows);
+  slot_ = 0;
+  focus_ = 0;
+  if (focus < rows_.size() && rows_[focus].is_enabled()) {
+    focus_ = focus;
+    return;
+  }
+  for (size_t i = 0; i < rows_.size(); ++i) {
+    if (rows_[i].is_enabled()) {
+      focus_ = i;
+      break;
+    }
+  }
+}
+
 bool MenuScreen::SetFocus(size_t index) {
   if (index >= rows_.size() || !rows_[index].is_enabled()) {
     return false;
@@ -183,6 +208,12 @@ MenuScreen::Result MenuScreen::CaptureKey(const std::string& key) {
 }
 
 MenuScreen::Result MenuScreen::Handle(NavCommand command) {
+  const Result result = HandleNow(command);
+  ApplyPendingRows();
+  return result;
+}
+
+MenuScreen::Result MenuScreen::HandleNow(NavCommand command) {
   if (capturing()) {
     if (command != NavCommand::kBack) {
       return Result::kNone;
@@ -192,6 +223,9 @@ MenuScreen::Result MenuScreen::Handle(NavCommand command) {
   }
   if (command == NavCommand::kPreviousTab || command == NavCommand::kNextTab) {
     return Result::kNone;
+  }
+  if (command == NavCommand::kBack && back_ && back_()) {
+    return Result::kChanged;
   }
   if (command == NavCommand::kBack || command == NavCommand::kClose) {
     return leave_ && !leave_() ? Result::kChanged : Result::kBack;

@@ -33,6 +33,7 @@ or in the launcher's SETTINGS.
 | `--fm4_quick_restart=<button>` | QUICK RESTART: `dpad_left` or `dpad_right` restarts the race while driving, without the pause menu; `off` (default) leaves the D-pad alone. In the game: PC OPTIONS → GAMEPLAY → QUICK RESTART ([Quick restart](gameplay.md#quick-restart)) |
 | `--fm4_quick_restart_trigger=tap` | QUICK RESTART on one press; `hold` (default) restarts once the button has been held through a short fade, and letting go cancels. In the game: PC OPTIONS → GAMEPLAY → QUICK RESTART TRIGGER |
 | `--fm4_fast_post_race=globe` | Play the World Tour globe fast; `all` also the post-race XP bars, `off` (default) neither. In the game: PC OPTIONS → GAMEPLAY → FAST POST-RACE ([Fast post-race](gameplay.md#fast-post-race)) |
+| `--fm4_track_signage=false` | Shows every board's default, whatever the SIGNAGE page chose. In the game: PC OPTIONS → SIGNAGE → TRACK SIGNAGE ([Track signage](track-signage.md)) |
 | `--fm4_menu_music_folder=<folder>` | Shuffled menu MP3/WAV playlist; empty uses original music. See [Custom soundtrack](#custom-soundtrack) |
 | `--fm4_race_music_folder=<folder>` | Shuffled race MP3/WAV playlist; empty uses original music |
 | `--fm4_language=<code>` | The game's language (see [Languages](#languages)) |
