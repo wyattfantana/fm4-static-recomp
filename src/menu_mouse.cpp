@@ -33,6 +33,8 @@ REXCVAR_DEFINE_BOOL(fm4_menu_mouse_log, false, "Forza Motorsport 4",
                     "prompt bars on screen (layer, frame), the active ones and the item under the pointer");
 
 namespace fm4_static_recomp::menu_mouse {
+bool MainMenuState();  // below: the main menu is up
+
 namespace {
 
 // CAnimatedScrollingListCtrl (the main menu's tiles, the side lists): its primary vtable, its items
@@ -1157,7 +1159,9 @@ void ShowSelectLabel(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t ba
   if (hide && select && shown == 2) {
     const uint32_t select_root = PromptElement(base, select);
     const float select_x = Float(base, select_root + kWorldX), back_x = Float(base, back_root + kWorldX);
-    if (select_x < 0 && select_x < back_x && Float(base, select_root + kWorldY) <= input::kBottomRowY) {
+    // A side menu's bar, and the main menu's: BACK takes SELECT's slot, so its text sits clear of the bar's end.
+    if ((select_x < 0 || MainMenuState()) && select_x < back_x &&
+        Float(base, select_root + kWorldY) <= input::kBottomRowY) {
       want = select_x - back_x;
     }
   } else if (hide && shown != 2 && shown != 0) {
