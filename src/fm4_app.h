@@ -446,6 +446,9 @@ class Fm4App final : public rex::ReXApp {
                                                        : nullptr;
     });
     // EXIT TO DESKTOP on the main menu: YES in its box closes the window, as its close button does.
+    // With the mouse in use the main menu's bar shows BACK alone (no key icons, SELECT gone where a click chooses):
+    // EXIT TO DESKTOP fits there in full.
+    fm4_static_recomp::main_menu::SetBackAloneSource([] { return fm4_static_recomp::input::MouseLast(); });
     fm4_static_recomp::main_menu::SetQuit([this] {
       if (rex::ui::Window* const window = this->window()) {
         window->app_context().CallInUIThreadDeferred([this] {
@@ -507,6 +510,7 @@ class Fm4App final : public rex::ReXApp {
   }
 
   void OnShutdown() override {
+    fm4_static_recomp::main_menu::SetBackAloneSource(nullptr);
     fm4_static_recomp::ui::SetSettingsTabsChanged(nullptr);
     fm4_static_recomp::StopNarratorMute();
     fm4_static_recomp::decals::StopCustomDecals();
