@@ -176,6 +176,22 @@ bool TopLevelOf(const uint8_t* base, uint32_t splash) {
 // was used last) and the game's BACK on FREE PLAY's. Scratch goes below the caller's stack, the calls below that.
 // Whether the bar has laid its prompts out (each label measured): only then is the label changed, so the bar lays
 // the new one out from its real width, as it does its own.
+float LabelsWidth(const uint8_t* base, uint32_t bar) {
+  const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
+  float total = 0;
+  for (uint32_t p = begin; GuestPointer(begin) && p + kPromptStride <= end && p < begin + 16 * kPromptStride;
+       p += kPromptStride) {
+    const uint32_t button = Word(base, p);
+    if (!GuestPointer(button)) continue;
+    float width;
+    const uint32_t bits = Word(base, button + kPromptLabelWidth);
+    std::memcpy(&width, &bits, 4);
+    total += width;
+  }
+  return total;
+}
+float g_labelled_width = 0;  // the labels' measured width when BACK's prompt was last put in (Frame thread)
+
 bool LaidOut(const uint8_t* base, uint32_t bar) {
   const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
   if (!GuestPointer(begin) || end <= begin || (end - begin) / kPromptStride > 16) return false;
@@ -338,7 +354,14 @@ void Frame(PPCContext& ctx, uint8_t* base, uint32_t screen, uint32_t stack) {
   }
   if (Word(base, splash + kScreenPopup) == 0 && Clock() - g_box_shown > 0.5) g_box_open = false;
   const bool top = TopLevelOf(base, splash);
-  if (LaidOut(base, bar)) SetBackPrompt(ctx, base, stack, bar, top);
+  if (LaidOut(base, bar)) {
+    // A new label is measured only after the bar has laid it out (by the old one's width): once its width is in,
+    // the prompt goes in again, so the bar lays the prompts out from the label it really shows.
+    const float width = LabelsWidth(base, bar);
+    if (bar == g_labelled_bar && std::fabs(width - g_labelled_width) >= 0.5f) g_labelled_bar = 0;
+    SetBackPrompt(ctx, base, stack, bar, top);
+    g_labelled_width = width;
+  }
   if (g_asked.exchange(false) && top && !g_box_open) {
     g_box_open = true;
     g_box_shown = Clock();
