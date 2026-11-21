@@ -1506,9 +1506,9 @@ bool Fm4MainMenuBack(PPCRegister& r30) {
 }
 
 // A screen's update, each frame (r3 = the screen): the main menu's label and box.
-void Fm4ScreenUpdate(PPCContext& ctx, uint8_t* base, PPCRegister& r1, PPCRegister& r3) {
+void Fm4ScreenUpdate(PPCContext& ctx, uint8_t* base, PPCRegister& r1, PPCRegister& r31) {
   FM4_HOOK_CENSUS();
-  fm4_static_recomp::main_menu::Frame(ctx, base, r3.u32, r1.u32);
+  fm4_static_recomp::main_menu::Frame(ctx, base, r31.u32, r1.u32);
 }
 
 // The screens' answer to a popup button (0x824E48B8(screen, id)): the EXIT TO DESKTOP box's YES / NO.

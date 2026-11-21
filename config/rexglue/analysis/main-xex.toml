@@ -447,13 +447,13 @@ name = "Fm4MainMenuBack"
 registers = ["r30"]
 jump_address_on_true = 0x826114F0
 
-# Every screen's update, each frame (the base screen's vtable slot 10, shared by 207 screens; r3 the screen): on
-# the main menu, BACK's label and the EXIT TO DESKTOP box.
+# Every screen's update, each frame (the base screen's vtable slot 10, shared by 207 screens), at its end once the
+# screen and its bar have updated (r31 the screen): on the main menu, BACK's label and the EXIT TO DESKTOP box.
 [[midasm_hook]]
-address = 0x82516458
+address = 0x825164E0
 name = "Fm4ScreenUpdate"
 context = true
-registers = ["r1", "r3"]
+registers = ["r1", "r31"]
 
 # The screens' answer to a button (0x824E48B8(screen, id): popup buttons call it): the main menu's EXIT TO
 # DESKTOP box answers with ids of its own, which the screen never sees.
