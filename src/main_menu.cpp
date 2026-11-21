@@ -60,14 +60,10 @@ constexpr uint32_t kPromptButtonB = 1;
 using fm4_guest::kShowYesNo;
 using fm4_guest::kMakeScreenCallback;
 using fm4_guest::kYesNoSound;
-// The bar's prompt buttons [+0x12C, +0x130), 0x34 apart: a button's label width +0xFC, its inner group's x holder
-// +0xA4 (set with kSetElementX: an offset from where the bar lays the prompt out).
-constexpr uint32_t kPromptsBegin = 0x12C, kPromptsEnd = 0x130, kPromptStride = 0x34;
-constexpr uint32_t kPromptLabelWidth = 0xFC, kPromptInnerHolder = 0xA4, kLocalX = 0x0C;
-using fm4_guest::kSetElementX;
-// EXIT's width: the bar lays its prompts out from a fixed start, so EXIT TO DESKTOP's extra width moves them all
-// left by that much, ending where EXIT ends.
-constexpr float kShortLabelWidth = 28;
+// The bar's prompt buttons [+0x12C, +0x130), 0x34 apart: a button's label width +0xFC (measured once its text is
+// drawn: a bar laid out before that places a new label by the old one's width).
+constexpr uint32_t kPromptsBegin = 0x12C, kPromptsEnd = 0x130, kPromptStride = 0x34, kPromptLabelWidth = 0xFC;
+float g_laid_out_width = 0;  // the labels' total width the bar was last laid out with (Frame thread)
 // A screen's popup over it (CPopupMsgBox: the game's boxes and ours), 0 when there is none.
 constexpr uint32_t kScreenPopup = 0xB4;
 constexpr uint32_t kCallbackHolder = 0x20, kHolderReference = 0x1C;
@@ -180,36 +176,22 @@ bool TopLevelOf(const uint8_t* base, uint32_t splash) {
 // The bar's BACK slot says EXIT on the main menu's own menu (as short as BACK: the bar lays its prompts out
 // from a fixed start, a longer label would run past its end) (its icon the pad's BACK button while a pad
 // was used last) and the game's BACK on FREE PLAY's. Scratch goes below the caller's stack, the calls below that.
-// Every prompt's inner group at `x` (BACK's left alone when another feature places it).
-void ShiftPrompts(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t bar, bool back_too) {
+// The bar laid out again once a label's measured width has changed since its last layout.
+void RelayOutWhenMeasured(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t bar) {
   const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
   if (!GuestPointer(begin) || end < begin || (end - begin) / kPromptStride > 16) return;
-  float label = 0;
-  for (uint32_t p = begin; p + kPromptStride <= end; p += kPromptStride) {
-    const uint32_t button = Word(base, p);
-    if (GuestPointer(button)) {
-      float w;
-      const uint32_t bits = Word(base, button + kPromptLabelWidth);
-      std::memcpy(&w, &bits, 4);
-      label = std::max(label, w);  // the widest is EXIT TO DESKTOP
-    }
-  }
-  const float x = g_label_exit && !g_label_full ? -std::max(0.0f, label - kShortLabelWidth) : 0.0f;
+  float total = 0;
   for (uint32_t p = begin; p + kPromptStride <= end; p += kPromptStride) {
     const uint32_t button = Word(base, p);
     if (!GuestPointer(button)) continue;
-    if (!back_too && p + kPromptStride == end) continue;  // BACK is the last
-    const uint32_t holder = button + kPromptInnerHolder, target = Word(base, holder + 4);
-    if (!GuestPointer(target)) continue;
-    float now;
-    const uint32_t bits = Word(base, target + kLocalX);
-    std::memcpy(&now, &bits, 4);
-    if (std::fabs(now - x) < 0.5f) continue;
-    CallGuest(ctx, base, stack, kSetElementX, [&](PPCContext& c) {
-      c.r3.u64 = holder;
-      c.f1.f64 = x;
-    });
+    float width;
+    const uint32_t bits = Word(base, button + kPromptLabelWidth);
+    std::memcpy(&width, &bits, 4);
+    total += width;
   }
+  if (std::fabs(total - g_laid_out_width) < 0.5f) return;
+  g_laid_out_width = total;
+  CallVirtual(ctx, base, stack, bar + kBarView, kViewLayout);
 }
 
 void SetBackPrompt(PPCContext& ctx, uint8_t* base, uint32_t caller_stack, uint32_t bar, bool exit) {
@@ -361,7 +343,7 @@ void Frame(PPCContext& ctx, uint8_t* base, uint32_t screen, uint32_t stack) {
   if (Word(base, splash + kScreenPopup) == 0 && Clock() - g_box_shown > 0.5) g_box_open = false;
   const bool top = TopLevelOf(base, splash);
   SetBackPrompt(ctx, base, stack, bar, top);
-  ShiftPrompts(ctx, base, stack - 0x140, bar, !g_label_full);
+  RelayOutWhenMeasured(ctx, base, stack - 0x140, bar);
   if (g_asked.exchange(false) && top && !g_box_open) {
     g_box_open = true;
     g_box_shown = Clock();
