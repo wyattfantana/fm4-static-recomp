@@ -60,8 +60,6 @@ constexpr uint32_t kPromptButtonB = 1;
 using fm4_guest::kShowYesNo;
 using fm4_guest::kMakeScreenCallback;
 using fm4_guest::kYesNoSound;
-// The bar's prompt buttons [+0x12C, +0x130), 0x34 apart: a button's label width +0xFC, measured once laid out.
-constexpr uint32_t kPromptsBegin = 0x12C, kPromptsEnd = 0x130, kPromptStride = 0x34, kPromptLabelWidth = 0xFC;
 // A screen's popup over it (CPopupMsgBox: the game's boxes and ours), 0 when there is none.
 constexpr uint32_t kScreenPopup = 0xB4;
 constexpr uint32_t kCallbackHolder = 0x20, kHolderReference = 0x1C;
@@ -176,68 +174,6 @@ bool TopLevelOf(const uint8_t* base, uint32_t splash) {
 // was used last) and the game's BACK on FREE PLAY's. Scratch goes below the caller's stack, the calls below that.
 // Whether the bar has laid its prompts out (each label measured): only then is the label changed, so the bar lays
 // the new one out from its real width, as it does its own.
-float LabelsWidth(const uint8_t* base, uint32_t bar) {
-  const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
-  float total = 0;
-  for (uint32_t p = begin; GuestPointer(begin) && p + kPromptStride <= end && p < begin + 16 * kPromptStride;
-       p += kPromptStride) {
-    const uint32_t button = Word(base, p);
-    if (!GuestPointer(button)) continue;
-    float width;
-    const uint32_t bits = Word(base, button + kPromptLabelWidth);
-    std::memcpy(&width, &bits, 4);
-    total += width;
-  }
-  return total;
-}
-// The bar's prompts sit in one group, right-aligned to the bar's end by its x (holder +0x14C): the bar sets it from
-// the labels' widths when it lays out, before a new label is measured, so EXIT TO DESKTOP would run past the end
-// by its extra width. The group is put where the widths it really shows place it: its last prompt's x, icon and
-// label (prompt: x +0x0C of its element, icon width +0xF8, label width +0xFC).
-constexpr uint32_t kGroupHolder = 0x14C, kPromptIconWidth = 0xF8, kLocalX = 0x0C;
-using fm4_guest::kSetElementX;
-
-float FloatAt(const uint8_t* base, uint32_t address) {
-  float value;
-  const uint32_t bits = Word(base, address);
-  std::memcpy(&value, &bits, 4);
-  return value;
-}
-
-void AlignGroup(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t bar) {
-  const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
-  if (!GuestPointer(begin) || end <= begin || (end - begin) / kPromptStride > 16) return;
-  const uint32_t last = Word(base, end - kPromptStride);
-  const uint32_t holder = bar + kGroupHolder, group = Word(base, holder + 4);
-  if (!GuestPointer(last) || !GuestPointer(group)) return;
-  const uint32_t view = Word(base, last + 0x54), list = GuestPointer(view) ? Word(base, view + 0x10) : 0;
-  const uint32_t element = GuestPointer(list) ? Word(base, list + 4) : 0;
-  if (!GuestPointer(element) || Word(base, group + 4) == 0) return;
-  const float icon = FloatAt(base, last + kPromptIconWidth), label = FloatAt(base, last + kPromptLabelWidth);
-  if (!(icon > 0) || !(label > 0)) return;
-  const float want = -(FloatAt(base, element + kLocalX) + icon + label);
-  const uint32_t group_element = Word(base, group + 4);
-  if (std::fabs(FloatAt(base, group_element + kLocalX) - want) < 0.5f) return;
-  CallGuest(ctx, base, stack, kSetElementX, [&](PPCContext& c) {
-    c.r3.u64 = holder;
-    c.f1.f64 = want;
-  });
-}
-
-bool LaidOut(const uint8_t* base, uint32_t bar) {
-  const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
-  if (!GuestPointer(begin) || end <= begin || (end - begin) / kPromptStride > 16) return false;
-  for (uint32_t p = begin; p + kPromptStride <= end; p += kPromptStride) {
-    const uint32_t button = Word(base, p);
-    if (!GuestPointer(button)) return false;
-    float width;
-    const uint32_t bits = Word(base, button + kPromptLabelWidth);
-    std::memcpy(&width, &bits, 4);
-    if (!(width > 0)) return false;
-  }
-  return true;
-}
-
 void SetBackPrompt(PPCContext& ctx, uint8_t* base, uint32_t caller_stack, uint32_t bar, bool exit) {
   bool full = false;
   if (exit) {
@@ -380,16 +316,17 @@ void Frame(PPCContext& ctx, uint8_t* base, uint32_t screen, uint32_t stack) {
   const uint32_t splash = g_splash;
   if (!Enabled() || screen != splash || Word(base, splash) != kSplashVtable) return;
   const uint32_t bar = Word(base, splash + kBar);
-  if (base[splash + kState] != 0 || !GuestPointer(bar)) {
-    g_labelled_bar = 0;  // set again once the menus are up (the game may have rebuilt the bar)
+  if (!GuestPointer(bar)) {
+    g_labelled_bar = 0;  // set again once the bar is back (the game may have rebuilt it)
     return;
   }
+  // The label goes in as soon as the bar has its BACK, before the bar shows: the bar sizes its prompts when it
+  // comes on screen and does not size them again, so a label put in later would run past the bar's end.
+  const bool menus = base[splash + kState] == 0;
+  const bool top = !menus || TopLevelOf(base, splash);
+  SetBackPrompt(ctx, base, stack, bar, top);
+  if (!menus) return;
   if (Word(base, splash + kScreenPopup) == 0 && Clock() - g_box_shown > 0.5) g_box_open = false;
-  const bool top = TopLevelOf(base, splash);
-  if (LaidOut(base, bar)) {
-    SetBackPrompt(ctx, base, stack, bar, top);
-    AlignGroup(ctx, base, stack - 0x140, bar);
-  }
   if (g_asked.exchange(false) && top && !g_box_open) {
     g_box_open = true;
     g_box_shown = Clock();
