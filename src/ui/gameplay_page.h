@@ -14,6 +14,8 @@ namespace fm4_static_recomp::ui {
 // (fm4_quick_race_laps; DEFAULT removes the line, the next track select and race take it) and
 // QUICK RESTART, its button and its trigger (fm4_quick_restart, fm4_quick_restart_trigger).
 // SAVE & APPLY (Y) writes them and sets them at once.
+// the menu items that need Xbox LIVE (fm4_hide_online_items). SAVE & APPLY (Y) writes them and
+// sets them at once.
 std::unique_ptr<hostui::MenuScreen> CreateGameplayPage(config::HostConfig& config);
 // the World Tour narrator (fm4_mute_narrator). SAVE & APPLY (Y) writes them and sets them at
 // once; the narrator's voice bank already loaded from game_data_root is changed in place

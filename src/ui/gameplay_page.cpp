@@ -19,6 +19,11 @@
 #include "narrator_mute.h"
 #include "quick_race_laps.h"
 
+REXCVAR_DEFINE_BOOL(fm4_hide_online_items, false, "Forza Motorsport 4",
+                    "Leaves the menu items that need Xbox LIVE or the Forza servers off the "
+                    "menus (COMMUNITY, MARKETPLACE, RIVALS, BUY TUNING SETUPS, BUY DESIGNS), from "
+                    "the next time each menu is built");
+
 namespace fm4_static_recomp::ui {
 namespace {
 
@@ -45,6 +50,7 @@ int ButtonIndex(std::string_view name) {
   return -1;
 }
 constexpr const char* kMuteNarrator = "fm4_mute_narrator";
+constexpr const char* kHideOnlineItems = "fm4_hide_online_items";
 
 // A saved count the game takes, or nullopt.
 std::optional<int> ParseLaps(const std::string& value) {
@@ -129,6 +135,12 @@ struct Draft {
         config.Set(kRestartTrigger, "\"" + value + "\"");
       } else if (name == kMuteNarrator) {
         config.Set(kMuteNarrator, value);
+      } else if (name == kHideOnlineItems) {
+        if (value == "false") {  // the default: no line
+          config.Remove(kHideOnlineItems);
+        } else {
+          config.Set(kHideOnlineItems, value);
+        }
       }
     }
     if (!config.Save()) {
@@ -241,6 +253,23 @@ MenuRow NarratorRow(const std::shared_ptr<Draft>& draft) {
   };
   row.badge = [] { return LaunchOptionBadge(kMuteNarrator); };
   row.unapplied = [draft] { return draft->pending.contains(kMuteNarrator); };
+MenuRow OnlineItemsRow(const std::shared_ptr<Draft>& draft) {
+  MenuRow row;
+  row.label = "ONLINE MENU ITEMS";
+  row.divider_above = true;
+  row.description =
+      "COMMUNITY and MARKETPLACE on the main menu, RIVALS, BUY TUNING SETUPS and BUY DESIGNS "
+      "need Xbox LIVE or the Forza servers, so here they only say the service is unavailable. "
+      "HIDDEN leaves them off the menus. Each menu shows the change the next time the game "
+      "builds it: the main menu after you've been into another screen, or at the next start.";
+  row.value = [draft] {
+    return std::string(draft->Value(kHideOnlineItems) == "true" ? "HIDDEN" : "SHOWN");
+  };
+  row.adjust = [draft](int) {
+    draft->Change(kHideOnlineItems, draft->Value(kHideOnlineItems) == "true" ? "false" : "true");
+  };
+  row.badge = [] { return LaunchOptionBadge(kHideOnlineItems); };
+  row.unapplied = [draft] { return draft->pending.contains(kHideOnlineItems); };
   return row;
 }
 
@@ -255,6 +284,7 @@ std::unique_ptr<MenuScreen> CreateGameplayPage(config::HostConfig& config,
   rows.push_back(QuickRestartButtonRow(draft));
   rows.push_back(RestartTriggerRow(draft));
   rows.push_back(NarratorRow(draft));
+  rows.push_back(OnlineItemsRow(draft));
   auto screen = std::make_unique<MenuScreen>("GAMEPLAY", std::move(rows));
   screen->set_apply([draft] { draft->SaveAndApply(); });
   screen->set_leave([draft] {
@@ -312,6 +342,14 @@ void ApplySavedGameplaySettings(const config::HostConfig& config) {
       REXLOG_INFO("Gameplay settings: {} = {}", kMuteNarrator, *value);
     } else {
       REXLOG_WARN("Gameplay settings: ignored {} = {}", kMuteNarrator, *value);
+  if (const auto value = config.Get(kHideOnlineItems)) {
+    if (FromCommandLine(kHideOnlineItems)) {
+      REXLOG_INFO("Gameplay settings: {} comes from the command line, not {}", kHideOnlineItems,
+                  config.path().string());
+    } else if ((*value != "true" && *value != "false") || !rex::cvar::SetFlagByName(kHideOnlineItems, *value)) {
+      REXLOG_WARN("Gameplay settings: ignored {} = {} in {}", kHideOnlineItems, *value, config.path().string());
+    } else {
+      REXLOG_INFO("Gameplay settings: {} = {}", kHideOnlineItems, *value);
     }
   }
 }

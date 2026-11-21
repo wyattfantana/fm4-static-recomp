@@ -55,6 +55,7 @@ struct Page {
     rex::cvar::SetFlagByName("fm4_quick_restart", "off");
     rex::cvar::SetFlagByName("fm4_quick_restart_trigger", "hold");
     rex::cvar::SetFlagByName("fm4_mute_narrator", "false");
+    rex::cvar::SetFlagByName("fm4_hide_online_items", "false");
   }
 
   std::string Value(size_t row = 0) const { return screen->rows()[row].value(); }
@@ -217,4 +218,34 @@ TEST_CASE("A saved narrator setting is applied at startup, a bad one ignored", "
   Page page("fm4_mute_narrator = maybe\n");
   ui::ApplySavedGameplaySettings(page.config);
   CHECK(rex::cvar::GetFlagByName("fm4_mute_narrator") == "false");
+TEST_CASE("ONLINE MENU ITEMS are shown by default and HIDDEN saves and applies",
+          "[gameplay_page]") {
+  Page page("");
+  CHECK(page.screen->rows()[1].label == "ONLINE MENU ITEMS");
+  CHECK(page.Value(1) == "SHOWN");
+  page.Step(1, NavCommand::kRight);
+  CHECK(page.Value(1) == "HIDDEN");
+  CHECK(page.screen->rows()[1].unapplied());
+  CHECK(rex::cvar::GetFlagByName("fm4_hide_online_items") == "false");
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(page.File() == "fm4_hide_online_items = true\n");
+  CHECK(rex::cvar::GetFlagByName("fm4_hide_online_items") == "true");
+  page.Step(1, NavCommand::kRight);
+  CHECK(page.Value(1) == "SHOWN");
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(page.File().find("fm4_hide_online_items") == std::string::npos);  // SHOWN is the default: its line goes
+  CHECK(rex::cvar::GetFlagByName("fm4_hide_online_items") == "false");
+}
+
+TEST_CASE("A saved online items setting is applied at startup, a bad one ignored",
+          "[gameplay_page]") {
+  {
+    Page page("fm4_hide_online_items = true\n");
+    ui::ApplySavedGameplaySettings(page.config);
+    CHECK(rex::cvar::GetFlagByName("fm4_hide_online_items") == "true");
+    CHECK(page.Value(1) == "HIDDEN");
+  }
+  Page page("fm4_hide_online_items = sometimes\n");
+  ui::ApplySavedGameplaySettings(page.config);
+  CHECK(rex::cvar::GetFlagByName("fm4_hide_online_items") == "false");
 }
