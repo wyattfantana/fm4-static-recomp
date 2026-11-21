@@ -1104,6 +1104,9 @@ constexpr float kLabelGoneY = 4000;
 // with the game's setter on the button's holder for it; the bar's own layout is left as it is).
 using fm4_guest::kSetElementX;
 constexpr uint32_t kPromptInnerHolder = 0xA4, kLocalX = 0x0C;
+// The prompt groups this code moved (only those are put back: another feature may place prompts too).
+std::unordered_set<uint32_t> g_moved_prompts;
+
 void ShowSelectLabel(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t bar, bool hide) {
   const uint32_t begin = Word(base, bar + kPromptsBegin), end = Word(base, bar + kPromptsEnd);
   if (!GuestPointer(begin) || end < begin || (end - begin) / kPromptStride > 16) return;
@@ -1129,7 +1132,7 @@ void ShowSelectLabel(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t ba
       const uint32_t moved_holder = button + kPromptInnerHolder;
       const uint32_t moved_target = Word(base, moved_holder + 4);
       if (moved && GuestPointer(moved_target) && Word(base, moved_target + 4) == moved &&
-          std::fabs(Float(base, moved + kLocalX)) >= 0.5f) {
+          g_moved_prompts.erase(button) && std::fabs(Float(base, moved + kLocalX)) >= 0.5f) {
         CallGuest(ctx, base, stack, kSetElementX, [&](PPCContext& c) {
           c.r3.u64 = moved_holder;
           c.f1.f64 = 0;
@@ -1169,11 +1172,17 @@ void ShowSelectLabel(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t ba
   } else if (hide) {
     return;  // the bar between layouts: BACK stays where it is until it is back
   }
+  if (want == 0 && !g_moved_prompts.contains(back)) return;  // not ours to put back
   if (std::fabs(Float(base, inner + kLocalX) - want) < 0.5f) return;
   CallGuest(ctx, base, stack, kSetElementX, [&](PPCContext& c) {
     c.r3.u64 = holder;
     c.f1.f64 = want;
   });
+  if (want == 0) {
+    g_moved_prompts.erase(back);
+  } else {
+    g_moved_prompts.insert(back);
+  }
 }
 
 // The pointer's prompt highlight: the box last reported, and who draws it.
