@@ -271,7 +271,9 @@ bool HostUi::Open(std::vector<MenuTab> tabs, size_t tab) {
   }
   tabs_ = std::move(tabs);
   tab_ = tab;
+  ClearParents();
   screen_ = std::move(screen);
+  WirePages(*screen_);
   pointer_first_.reset();
   opened_at_ = std::chrono::steady_clock::now();
   const auto device = input_system_ ? input_system_->ActiveDevice(0) : std::nullopt;
@@ -289,6 +291,24 @@ bool HostUi::Open(std::vector<MenuTab> tabs, size_t tab) {
   return true;
 }
 
+void HostUi::SetTabs(std::vector<MenuTab> tabs) {
+  if (tab_ >= tabs.size()) return;
+  tabs_ = std::move(tabs);
+  RequestPaint();
+}
+
+void HostUi::WirePages(MenuScreen& screen) {
+  screen.set_page_opener([this](MenuScreen::PageMaker page) { pending_page_ = std::move(page); });
+}
+
+void HostUi::ClearParents() {
+  while (!parents_.empty()) {
+    parents_.back()->Update(true);
+    parents_.pop_back();
+  }
+  pending_page_ = nullptr;
+}
+
 void HostUi::Close() {
   if (applying_) {
     // A row's adjust is running; destroying its screen now would destroy the
@@ -299,6 +319,7 @@ void HostUi::Close() {
   if (screen_) {
     screen_->Update(true);
   }
+  ClearParents();
   screen_.reset();
   picture_textures_.clear();  // the drawer releases them once the frames using them are done
   row_rects_.clear();
@@ -390,7 +411,9 @@ std::optional<bool> HostUi::SwitchTab(size_t tab) {
     return std::nullopt;
   }
   screen_->Update(true);
+  ClearParents();
   screen_ = std::move(screen);
+  WirePages(*screen_);
   tab_ = tab;
   row_rects_.clear();
   pointer_first_.reset();
@@ -469,6 +492,28 @@ void HostUi::Apply(NavCommand command) {
     if (outcome.focus_moved) slide_at_end_ = false;  // another slider: its end sounds again
   }
   PlaySound(NavSound(outcome));
+  // A page a row asked to open goes over this one.
+  if (auto page = std::exchange(pending_page_, nullptr); page && !close_pending_) {
+    if (std::unique_ptr<MenuScreen> next = page()) {
+      WirePages(*next);
+      parents_.push_back(std::move(screen_));
+      screen_ = std::move(next);
+      row_rects_.clear();
+      pointer_first_.reset();
+      RequestPaint();
+      return;
+    }
+  }
+  // Back on a page opened over another: that one again.
+  if (command == NavCommand::kBack && result == MenuScreen::Result::kBack && !parents_.empty() && !close_pending_) {
+    screen_->Update(true);
+    screen_ = std::move(parents_.back());
+    parents_.pop_back();
+    row_rects_.clear();
+    pointer_first_.reset();
+    RequestPaint();
+    return;
+  }
   if (std::exchange(close_pending_, false) || result == MenuScreen::Result::kBack) {
     Close();
     return;

@@ -178,6 +178,12 @@ class MenuScreen {
   // Back only (not closing the menu or changing tab): true when the page took it, going up a level of its own.
   void set_back(std::function<bool()> back) { back_ = std::move(back); }
   void set_status(std::function<MenuStatus()> status) { status_ = std::move(status); }
+  // Opens another page over this one, once the command that asked has finished; back comes back here.
+  using PageMaker = std::function<std::unique_ptr<MenuScreen>()>;
+  void set_page_opener(std::function<void(PageMaker)> opener) { page_opener_ = std::move(opener); }
+  void OpenPage(PageMaker page) {
+    if (page_opener_) page_opener_(std::move(page));
+  }
   MenuStatus status() const { return status_ ? status_() : MenuStatus{}; }
   size_t focus() const { return focus_; }
   // Moves the focus to `index` if that row is enabled.
@@ -219,6 +225,7 @@ class MenuScreen {
   std::function<void()> apply_;
   std::function<bool()> leave_;
   std::function<bool()> back_;
+  std::function<void(PageMaker)> page_opener_;
   std::function<MenuStatus()> status_;
   MenuKeyCapture capture_;
   std::vector<std::string> headers_;

@@ -7,27 +7,26 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "config/host_config.h"
 #include "ui/hostui/menu.h"
 
 namespace fm4_static_recomp::ui {
 
-// The GAMEPLAY tab after MOUSE, kept in gameplay.toml: the experimental Quick Race lap count
-// (fm4_quick_race_laps; DEFAULT removes the line, the next track select and race take it) and
-// QUICK RESTART, its button and its trigger (fm4_quick_restart, fm4_quick_restart_trigger).
-// SAVE & APPLY (Y) writes them and sets them at once.
-// the menu items that need Xbox LIVE (fm4_hide_online_items). SAVE & APPLY (Y) writes them and
-// sets them at once.
-// CUSTOM DECALS (fm4_custom_decals_folder, fm4_all_sponsor_decals; the paint editor takes them the
-// next time it opens). SAVE & APPLY (Y) writes them and sets them at once.
-// the HARDCORE options (fm4_race_payouts, fm4_repair_costs, fm4_resale_value;
-// from the next start). SAVE & APPLY (Y) writes them and
-// sets them at once.
-std::unique_ptr<hostui::MenuScreen> CreateGameplayPage(config::HostConfig& config);
-// the World Tour narrator (fm4_mute_narrator). SAVE & APPLY (Y) writes them and sets them at
-// once; the narrator's voice bank already loaded from game_data_root is changed in place
-// (empty: only from the next start).
+// The tabs after MOUSE, kept in gameplay.toml, as ui/settings_layout.h lays them out: GAME, and MOD MENU once its
+// switch at the bottom of GAME is on. SAVE & APPLY (Y) writes a page's settings and sets them at once.
+struct SettingsPageInfo {
+  std::string title;
+  bool mod = false;
+};
+std::vector<SettingsPageInfo> SettingsPages();
+std::unique_ptr<hostui::MenuScreen> CreateSettingsPage(bool mod, config::HostConfig& config,
+                                                       const std::filesystem::path& game_data_root = {});
+// Called after SAVE & APPLY changes which tabs there are.
+void SetSettingsTabsChanged(std::function<void()> changed);
+
+// Every setting on one page, whatever the layout (the unit tests).
 std::unique_ptr<hostui::MenuScreen> CreateGameplayPage(config::HostConfig& config,
                                                        const std::filesystem::path& game_data_root = {});
 

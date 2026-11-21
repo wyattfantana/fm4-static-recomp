@@ -1966,6 +1966,12 @@ void PlayQueuedUiSounds(PPCContext& ctx, uint8_t* base, uint32_t stack) {
     }
     if (const uint32_t id = LoadGuestWord(base, sound.id_address)) {
       CallGuest(ctx, base, stack, play, {manager, 0, id});
+    }
+  }
+}
+
+}  // namespace
+
 // The game database's query (out, database, sql). The livery system maps decal ids to files with
 // the query below each time a livery is first needed and each time the paint editor opens; just
 // before it, the custom decals' rows (src/custom_decals.h) are replaced when they changed, with
@@ -2056,8 +2062,6 @@ void AddCustomDecalItem(PPCContext& ctx, uint8_t* base, uint32_t stack, uint32_t
   }
 }
 
-}  // namespace
-
 void fm4_static_recomp::PlayUiSound(uint32_t id_address) {
   const auto now = std::chrono::steady_clock::now();
   const std::lock_guard lock(g_ui_sound_mutex);
@@ -2070,6 +2074,8 @@ void fm4_static_recomp::PlayUiSound(uint32_t id_address) {
   last = now;
   g_ui_sounds.push_back({id_address, now});
   g_ui_sounds_waiting.store(true, std::memory_order_release);
+}
+
 // CREATE LAYER: APPLY A CUSTOM DECAL after APPLY A MANUFACTURER DECAL. A layer menu is where every
 // visit to the decal picker starts: the picker lists the game's decals until a custom item is chosen,
 // and keeps the custom ones while that visit lasts (a cancelled placement reopens the picker, and

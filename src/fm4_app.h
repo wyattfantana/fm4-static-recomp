@@ -507,6 +507,7 @@ class Fm4App final : public rex::ReXApp {
   }
 
   void OnShutdown() override {
+    fm4_static_recomp::ui::SetSettingsTabsChanged(nullptr);
     fm4_static_recomp::StopNarratorMute();
     fm4_static_recomp::decals::StopCustomDecals();
     fm4_static_recomp::StopFastPostRace();
@@ -993,10 +994,28 @@ class Fm4App final : public rex::ReXApp {
            ui::ControlsPageServices mouse;
            mouse.apply = [this] { return ApplyControls(); };
            return ui::CreateMousePage(*controls_config_, std::move(mouse));
-         }},
-        {"GAMEPLAY", [this] { return ui::CreateGameplayPage(*gameplay_config_, game_data_root()); }},
-        {"SIGNAGE", [] { return ui::CreateSignagePage(); }}};
+         }}
+    };
+    const size_t fixed_tabs = tabs.size();
+    AddSettingsTabs(tabs);
+    // SAVE & APPLY on the MOD MENU switch: its tab comes or goes with the menu open.
+    ui::SetSettingsTabsChanged([this, tabs, fixed_tabs]() mutable {
+      if (!host_ui_) return;
+      tabs.resize(fixed_tabs);
+      AddSettingsTabs(tabs);
+      host_ui_->SetTabs(tabs);
+    });
     host_ui_->Open(std::move(tabs), 0);
+  }
+
+  // The game settings' tabs, as ui/settings_layout.h lays them out.
+  void AddSettingsTabs(std::vector<fm4_static_recomp::hostui::MenuTab>& tabs) {
+    namespace ui = fm4_static_recomp::ui;
+    for (const ui::SettingsPageInfo& page : ui::SettingsPages()) {
+      tabs.push_back({page.title, [this, mod = page.mod] {
+                        return ui::CreateSettingsPage(mod, *gameplay_config_, game_data_root());
+                      }});
+    }
   }
 
   std::unique_ptr<fm4_static_recomp::config::HostConfig> graphics_config_;

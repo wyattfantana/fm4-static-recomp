@@ -65,6 +65,8 @@ class HostUi final : public rex::ui::UIDrawer, public rex::ui::WindowInputListen
   // Opens on `tab`; LB and RB (or a click on a title) switch tabs, leaving the shown one as
   // back would. Fails (and logs) when the title's UI assets cannot be loaded.
   bool Open(std::vector<MenuTab> tabs, size_t tab);
+  // The tabs change with the menu open (a setting shows or hides one); the one shown stays.
+  void SetTabs(std::vector<MenuTab> tabs);
   void SetMenuKeys(MenuKeys keys);
   // Plays the game's menu sounds for what the menu does; null plays none.
   void set_sound(std::function<void(MenuSound)> sound) { sound_ = std::move(sound); }
@@ -109,6 +111,8 @@ class HostUi final : public rex::ui::UIDrawer, public rex::ui::WindowInputListen
   void LoadKeycaps();
   // False when the shown screen refused to leave; nullopt when nothing was to switch.
   std::optional<bool> SwitchTab(size_t tab);
+  void WirePages(MenuScreen& screen);
+  void ClearParents();
   void SwitchTabWithSound(size_t tab, MenuSound sound);
   void PlaySound(std::optional<MenuSound> sound);
   // The focused row's value, slider value and slot, to tell what a command changed.
@@ -184,6 +188,8 @@ class HostUi final : public rex::ui::UIDrawer, public rex::ui::WindowInputListen
   std::function<void(MenuSound)> sound_;
   // The stick has the focused slider against its end: its sound has played.
   bool slide_at_end_ = false;
+  std::vector<std::unique_ptr<MenuScreen>> parents_;  // the pages under the one shown
+  MenuScreen::PageMaker pending_page_;
   std::vector<MenuTab> tabs_;
   size_t tab_ = 0;
   std::unique_ptr<MenuScreen> screen_;
