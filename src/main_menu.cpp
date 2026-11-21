@@ -75,7 +75,9 @@ std::atomic<bool> g_pad_prompts{false};
 bool g_pad_back_down = false;  // pad thread
 // Frame thread: what the bar's BACK slot says now.
 uint32_t g_labelled_bar = 0;
-bool g_label_exit = false, g_label_pad = false;
+bool g_label_exit = false, g_label_pad = false, g_label_full = false;
+std::mutex g_alone_mutex;
+std::function<bool()> g_back_alone;
 std::mutex g_quit_mutex;
 std::function<void()> g_quit;
 
@@ -170,8 +172,13 @@ bool TopLevelOf(const uint8_t* base, uint32_t splash) {
 // from a fixed start, a longer label would run past its end) (its icon the pad's BACK button while a pad
 // was used last) and the game's BACK on FREE PLAY's. Scratch goes below the caller's stack, the calls below that.
 void SetBackPrompt(PPCContext& ctx, uint8_t* base, uint32_t caller_stack, uint32_t bar, bool exit) {
+  bool full = false;
+  if (exit) {
+    std::lock_guard lock(g_alone_mutex);
+    full = g_back_alone && g_back_alone();
+  }
   const bool pad = exit && g_pad_prompts;
-  if (bar == g_labelled_bar && exit == g_label_exit && pad == g_label_pad) return;
+  if (bar == g_labelled_bar && exit == g_label_exit && pad == g_label_pad && full == g_label_full) return;
   const uint32_t source = Word(base, bar + kBarSource), style = Word(base, bar + kBarStyle);
   if (!GuestPointer(source) || style > 2) return;
   int index = -1;
@@ -184,9 +191,10 @@ void SetBackPrompt(PPCContext& ctx, uint8_t* base, uint32_t caller_stack, uint32
     }
   }
   if (index < 0) return;  // the bar is not filled yet
-  g_labelled_bar = bar, g_label_exit = exit, g_label_pad = pad;
+  g_labelled_bar = bar, g_label_exit = exit, g_label_pad = pad, g_label_full = full;
   const uint32_t stack = caller_stack - 0x140, holders = stack;  // scratch [stack, stack + 8)
-  MakeLabel(ctx, base, stack, holders, exit ? uint32_t(kExitStringKey) : Word(base, kBackStringKey));
+  MakeLabel(ctx, base, stack, holders,
+            exit ? uint32_t(kExitToDesktopStringKey) : Word(base, kBackStringKey));
   const uint32_t icon = pad ? BackIconPath(style) : Word(base, kPromptIcons + 4 * (style * 11 + kPromptButtonB));
   const uint32_t gap_bits = Word(base, kPromptGap);
   float gap;
@@ -339,5 +347,10 @@ void SetQuit(std::function<void()> quit) {
 }
 
 void SetPadPrompts(bool pad) { g_pad_prompts = pad; }
+
+void SetBackAloneSource(std::function<bool()> alone) {
+  std::lock_guard lock(g_alone_mutex);
+  g_back_alone = std::move(alone);
+}
 
 }  // namespace fm4_static_recomp::main_menu
