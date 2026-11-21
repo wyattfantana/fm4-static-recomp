@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <atomic>
 #include <vector>
 
 #include <rex/cvar.h>
@@ -39,9 +40,19 @@ REXCVAR_DEFINE_STRING(fm4_custom_decals_folder, "", "Forza Motorsport 4",
 REXCVAR_DEFINE_BOOL(fm4_all_sponsor_decals, false, "Forza Motorsport 4",
                     "ALL SPONSOR DECALS: every decal the game has is offered on every car, not only "
                     "the car maker's usual ones (taken the next time the paint editor opens)");
+REXCVAR_DEFINE_STRING(fm4_fast_post_race, "off", "Forza Motorsport 4",
+                      "FAST POST-RACE: off; globe (the World Tour globe's spin and zoom to the "
+                      "next event play fast); all (also the post-race XP bars fill fast)");
 
 namespace fm4_static_recomp::ui {
 namespace {
+
+// fm4_fast_post_race as the guest's threads read it: the cvar is a string the UI thread sets.
+std::atomic<int> g_fast_post_race_mode{0};  // 0 off, 1 globe, 2 all
+
+void SetFastPostRaceMode(std::string_view mode) {
+  g_fast_post_race_mode.store(mode == "all" ? 2 : mode == "globe" ? 1 : 0, std::memory_order_relaxed);
+}
 
 using hostui::MenuRow;
 using hostui::MenuScreen;
@@ -80,6 +91,11 @@ struct PickedFolder {
   std::optional<std::string> folder;
   bool refused = false;  // the last folder chosen had '#' in its path (read only on the page's thread)
 };
+constexpr const char* kFastPostRace = "fm4_fast_post_race";
+
+// FAST POST-RACE's values, in the order the row steps through them, and their labels.
+constexpr std::pair<std::string_view, std::string_view> kFastPostRaceValues[] = {
+    {"off", "OFF"}, {"globe", "GLOBE"}, {"all", "GLOBE + XP BARS"}};
 
 // A saved count the game takes, or nullopt.
 std::optional<int> ParseLaps(const std::string& value) {
@@ -88,6 +104,15 @@ std::optional<int> ParseLaps(const std::string& value) {
     return std::nullopt;
   }
   return laps;
+}
+
+bool FromCommandLine(const char* name) {
+  return rex::cvar::GetFlagSource(name) == rex::cvar::Source::kCommandLine;
+}
+
+bool IsFastPostRaceValue(std::string_view value) {
+  return std::any_of(std::begin(kFastPostRaceValues), std::end(kFastPostRaceValues),
+                     [value](const auto& entry) { return entry.first == value; });
 }
 
 bool FromCommandLine(const char* name) {
@@ -178,6 +203,12 @@ struct Draft {
         }
       } else if (name == kAllSponsors) {
         config.Set(kAllSponsors, value);
+      } else if (name == kFastPostRace) {
+        if (value == "off") {
+          config.Remove(kFastPostRace);
+        } else {
+          config.Set(kFastPostRace, value);
+        }
       }
     }
     if (!config.Save()) {
@@ -201,6 +232,7 @@ struct Draft {
     if (decals_changed) {
       decals::SetSettings({REXCVAR_GET(fm4_custom_decals_folder), REXCVAR_GET(fm4_all_sponsor_decals)});
       decals::ApplyCustomDecals();
+      if (name == kFastPostRace) SetFastPostRaceMode(value);
     }
     pending.clear();
     leave_warned = false;
@@ -408,6 +440,34 @@ MenuRow AllSponsorsRow(const std::shared_ptr<Draft>& draft) {
   };
   row.badge = [] { return LaunchOptionBadge(kAllSponsors); };
   row.unapplied = [draft] { return draft->pending.contains(kAllSponsors); };
+MenuRow FastPostRaceRow(const std::shared_ptr<Draft>& draft) {
+  MenuRow row;
+  row.label = "FAST POST-RACE";
+  row.divider_above = true;
+  row.description =
+      "Plays the waits after a race fast. GLOBE: the World Tour globe's spin and zoom to the "
+      "next event, after a race and on opening World Tour, take a second or two. GLOBE + XP "
+      "BARS: the post-race XP bars fill fast too. Level-up rewards, gift cars and every "
+      "other screen stay as they are. After SAVE & APPLY it works from the next race, with no restart.";
+  row.value = [draft] {
+    const std::string value = draft->Value(kFastPostRace);
+    for (const auto& [name, label] : kFastPostRaceValues) {
+      if (name == value) return std::string(label);
+    }
+    return std::string("OFF");
+  };
+  row.adjust = [draft](int direction) {
+    constexpr int count = int(std::size(kFastPostRaceValues));
+    const std::string value = draft->Value(kFastPostRace);
+    int index = 0;
+    for (int i = 0; i < count; ++i) {
+      if (kFastPostRaceValues[i].first == value) index = i;
+    }
+    index = std::clamp(index + direction, 0, count - 1);
+    draft->Change(kFastPostRace, std::string(kFastPostRaceValues[index].first));
+  };
+  row.badge = [] { return LaunchOptionBadge(kFastPostRace); };
+  row.unapplied = [draft] { return draft->pending.contains(kFastPostRace); };
   return row;
 }
 
@@ -436,6 +496,7 @@ std::unique_ptr<MenuScreen> CreateGameplayPage(config::HostConfig& config) {
   rows.push_back(Heading("CUSTOM DECALS"));
   rows.push_back(DecalsFolderRow(draft, picked));
   rows.push_back(AllSponsorsRow(draft));
+  rows.push_back(FastPostRaceRow(draft));
   auto screen = std::make_unique<MenuScreen>("GAMEPLAY", std::move(rows));
   screen->set_apply([draft] { draft->SaveAndApply(); });
   screen->set_leave([draft] {
@@ -481,6 +542,8 @@ std::unique_ptr<MenuScreen> CreateGameplayPage(config::HostConfig& config) {
   });
   return screen;
 }
+
+int FastPostRaceMode() { return g_fast_post_race_mode.load(std::memory_order_relaxed); }
 
 void ApplySavedGameplaySettings(const config::HostConfig& config) {
   if (const auto value = config.Get(kLaps)) {
@@ -528,8 +591,19 @@ void ApplySavedGameplaySettings(const config::HostConfig& config) {
       REXLOG_INFO("Gameplay settings: {} = {}", kAllSponsors, *value);
     } else {
       REXLOG_WARN("Gameplay settings: ignored {} = {}", kAllSponsors, *value);
+  if (const auto value = config.Get(kFastPostRace); value && !FromCommandLine(kFastPostRace)) {
+    if (IsFastPostRaceValue(*value) && rex::cvar::SetFlagByName(kFastPostRace, *value)) {
+      REXLOG_INFO("Gameplay settings: {} = {}", kFastPostRace, *value);
+    } else {
+      REXLOG_WARN("Gameplay settings: ignored {} = {}", kFastPostRace, *value);
     }
   }
+  const std::string fast_post_race = REXCVAR_GET(fm4_fast_post_race);
+  if (!IsFastPostRaceValue(fast_post_race)) {
+    REXLOG_WARN("Gameplay settings: {} = {} is not one of off, globe, all: it stays off", kFastPostRace,
+                fast_post_race);
+  }
+  SetFastPostRaceMode(fast_post_race);
 }
 
 }  // namespace fm4_static_recomp::ui

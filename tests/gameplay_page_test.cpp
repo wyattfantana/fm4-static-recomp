@@ -56,6 +56,7 @@ struct Page {
     rex::cvar::SetFlagByName("fm4_quick_restart_trigger", "hold");
     rex::cvar::SetFlagByName("fm4_mute_narrator", "false");
     rex::cvar::SetFlagByName("fm4_hide_online_items", "false");
+    rex::cvar::SetFlagByName("fm4_fast_post_race", "off");
   }
 
   std::string Value(size_t row = 0) const { return screen->rows()[row].value(); }
@@ -248,4 +249,48 @@ TEST_CASE("A saved online items setting is applied at startup, a bad one ignored
   Page page("fm4_hide_online_items = sometimes\n");
   ui::ApplySavedGameplaySettings(page.config);
   CHECK(rex::cvar::GetFlagByName("fm4_hide_online_items") == "false");
+TEST_CASE("FAST POST-RACE steps OFF, GLOBE, GLOBE + XP BARS and saves on apply", "[gameplay_page]") {
+  Page page("");
+  CHECK(page.screen->rows()[1].label == "FAST POST-RACE");
+  CHECK(page.Value(1) == "OFF");
+  page.Step(1, NavCommand::kLeft);
+  CHECK(page.Value(1) == "OFF");
+  CHECK_FALSE(page.screen->rows()[1].unapplied());
+  page.Step(1, NavCommand::kRight);
+  CHECK(page.Value(1) == "GLOBE");
+  CHECK(page.screen->rows()[1].unapplied());
+  CHECK(rex::cvar::GetFlagByName("fm4_fast_post_race") == "off");
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(page.File() == "fm4_fast_post_race = globe\n");
+  CHECK(rex::cvar::GetFlagByName("fm4_fast_post_race") == "globe");
+  page.Step(1, NavCommand::kRight);
+  page.Step(1, NavCommand::kRight);
+  CHECK(page.Value(1) == "GLOBE + XP BARS");
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(page.File() == "fm4_fast_post_race = all\n");
+  CHECK(rex::cvar::GetFlagByName("fm4_fast_post_race") == "all");
+}
+
+TEST_CASE("FAST POST-RACE OFF removes the saved value", "[gameplay_page]") {
+  Page page("fm4_fast_post_race = globe\n");
+  ui::ApplySavedGameplaySettings(page.config);
+  CHECK(rex::cvar::GetFlagByName("fm4_fast_post_race") == "globe");
+  CHECK(page.Value(1) == "GLOBE");
+  page.Step(1, NavCommand::kLeft);
+  CHECK(page.Value(1) == "OFF");
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(page.File().find("fm4_fast_post_race") == std::string::npos);
+  CHECK(rex::cvar::GetFlagByName("fm4_fast_post_race") == "off");
+}
+
+TEST_CASE("A saved FAST POST-RACE is applied at startup, a bad one ignored", "[gameplay_page]") {
+  {
+    Page page("fm4_fast_post_race = all\n");
+    ui::ApplySavedGameplaySettings(page.config);
+    CHECK(rex::cvar::GetFlagByName("fm4_fast_post_race") == "all");
+    CHECK(page.Value(1) == "GLOBE + XP BARS");
+  }
+  Page page("fm4_fast_post_race = fastest\n");
+  ui::ApplySavedGameplaySettings(page.config);
+  CHECK(rex::cvar::GetFlagByName("fm4_fast_post_race") == "off");
 }

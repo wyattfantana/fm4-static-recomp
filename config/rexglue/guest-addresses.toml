@@ -54,6 +54,8 @@ kHelpButtonsTable = 0x8200A364
 kBackStringKey = 0x82DE05C4
 # The YES / NO box's sound.
 kYesNoSound = 0x82E025D4
+# The hash of READY_FOR_TROPHY, set by the game at start (a World Tour scene event).
+kWorldTourReadyForTrophy = 0x82DDEEDC
 # Holds the render scenario manager.
 kScenarioManagerPointer = 0x82DC3750
 # Each scenario control's offset, indexed by control id.

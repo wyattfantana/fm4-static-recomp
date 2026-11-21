@@ -367,6 +367,7 @@ class Fm4App final : public rex::ReXApp {
   void OnShutdown() override {
     fm4_static_recomp::StopNarratorMute();
     fm4_static_recomp::decals::StopCustomDecals();
+    fm4_static_recomp::StopFastPostRace();
     rex::ui::UnregisterBind("bind_toggle_fullscreen");
     rex::ui::UnregisterBind("bind_game_menu");
     fm4_static_recomp::ShutdownCustomMusic();

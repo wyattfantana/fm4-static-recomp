@@ -29,6 +29,7 @@ or in the launcher's SETTINGS.
 | `--fm4_quick_race_laps=<1-99>` | Experimental: the number of laps of every Quick Race; `0` (default) keeps each track's own count. In the game: PC OPTIONS → GAMEPLAY → QUICK RACE LAPS ([Quick Race laps](gameplay.md#quick-race-laps-experimental)) |
 | `--fm4_quick_restart=<button>` | QUICK RESTART: `dpad_left` or `dpad_right` restarts the race while driving, without the pause menu; `off` (default) leaves the D-pad alone. In the game: PC OPTIONS → GAMEPLAY → QUICK RESTART ([Quick restart](gameplay.md#quick-restart)) |
 | `--fm4_quick_restart_trigger=tap` | QUICK RESTART on one press; `hold` (default) restarts once the button has been held through a short fade, and letting go cancels. In the game: PC OPTIONS → GAMEPLAY → QUICK RESTART TRIGGER |
+| `--fm4_fast_post_race=globe` | Play the World Tour globe fast; `all` also the post-race XP bars, `off` (default) neither. In the game: PC OPTIONS → GAMEPLAY → FAST POST-RACE ([Fast post-race](gameplay.md#fast-post-race)) |
 | `--fm4_menu_music_folder=<folder>` | Shuffled menu MP3/WAV playlist; empty uses original music. See [Custom soundtrack](#custom-soundtrack) |
 | `--fm4_race_music_folder=<folder>` | Shuffled race MP3/WAV playlist; empty uses original music |
 | `--fm4_language=<code>` | The game's language (see [Languages](#languages)) |

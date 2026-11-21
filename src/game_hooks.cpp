@@ -8,6 +8,7 @@
 #include <bit>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -20,10 +21,12 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include <rex/chrono/clock.h>
 #include <rex/cvar.h>
 #include <rex/input/mnk/mnk_input_driver.h>
 #include <rex/logging.h>
@@ -41,6 +44,7 @@
 #include "custom_music.h"
 #include "car_dirt.h"
 #include "game_hooks.h"
+#include "ui/gameplay_page.h"
 #include "guest_addresses.h"
 #include "input/controller_layout.h"
 #include "input/input_context.h"
@@ -114,6 +118,7 @@ REXCVAR_DEFINE_BOOL(fm4_skip_intro, false, "Forza Motorsport 4",
 
 REXCVAR_DEFINE_DOUBLE(fm4_ui_speed, 1.0, "Forza Motorsport 4",
                       "Speed of the menus' animations against real time (1 = the console's)");
+
 
 REXCVAR_DEFINE_BOOL(fm4_hook_census, false, "Forza Motorsport 4",
                     "Diagnostics: log each midasm hook's first hit (Hook census: <name>), for "
@@ -884,6 +889,172 @@ void Fm4UiSceneStep(PPCRegister& f31) {
   EndFastLoad("menu", true);
   const uint32_t ms = g_ui_pending_ms.exchange(0, std::memory_order_relaxed);
   f31.f64 = std::min(ms, 100u) / 1000.0 * REXCVAR_GET(fm4_ui_speed);
+}
+
+namespace {
+
+// FAST POST-RACE fast-forwards an animation the player only waits through by running the guest
+// clock kFastForwardScale times as fast from its start to its end, so it plays through to its
+// normal end state in a fraction of the time:
+// - the World Tour globe's intro (the spin to the next event and the zoom down to its track),
+//   on opening World Tour and, longer, after a finished race (POST_RACE_ANIMATE: the zoom out
+//   from the track first): the scene's own animation, ended by the scene sending
+//   READY_FOR_EVENT_SELECT to the screen. (After a race it sends READY_FOR_TROPHY partway,
+//   before the spin, so that is not an end.) "globe" and "all".
+// - the post-race XP bars (909_LEVEL_PROGRESS): 4 s, then 2 s for the bonuses, ended by the
+//   screen's own last phase (3, which adds CONTINUE) or the screen closing. "all" only.
+// One runs at a time; a watchdog puts the clock back if the end never comes.
+constexpr double kFastForwardScale = 8.0;
+constexpr auto kFastForwardWatchdog = std::chrono::seconds(3);
+constexpr uint32_t kReadyForEventSelect = 0x2871B20D;  // hash of "READY_FOR_EVENT_SELECT"
+
+enum class FastForward { kNone, kGlobe, kXpBars };
+
+// A screen's popup over it (a level-up, a reward, a message): the clock is normal while there is one.
+constexpr uint32_t kScreenPopup = 0xB4;
+// The World Tour screen's list of what it has to present at READY_FOR_TROPHY: [begin, end).
+constexpr uint32_t kWorldTourAwardsBegin = 0x2B0, kWorldTourAwardsEnd = 0x2B4;
+// The XP screen's transition in plays at the normal speed.
+constexpr auto kXpScreenSettle = std::chrono::milliseconds(400);
+
+std::mutex g_fast_forward_mutex;
+std::condition_variable g_fast_forward_wake;
+std::thread g_fast_forward_monitor;
+bool g_fast_forward_stop = false;
+FastForward g_fast_forward = FastForward::kNone;
+uint32_t g_fast_forward_screen = 0;  // the screen it plays on
+bool g_fast_forward_running = false;  // the clock is fast now
+std::chrono::steady_clock::time_point g_fast_forward_started, g_fast_forward_hold_until, g_fast_forward_deadline;
+
+const char* FastForwardName(FastForward kind) {
+  return kind == FastForward::kGlobe ? "World Tour intro" : "XP bars";
+}
+
+bool FastForwardWanted(FastForward kind) {
+  const int mode = fm4_static_recomp::ui::FastPostRaceMode();
+  return mode == 2 || (mode == 1 && kind == FastForward::kGlobe);
+}
+
+// Under g_fast_forward_mutex.
+void EndFastForwardLocked(const char* why) {
+  const FastForward kind = std::exchange(g_fast_forward, FastForward::kNone);
+  g_fast_forward_running = false;
+  rex::chrono::Clock::set_guest_time_scalar(1.0);
+  const double real =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - g_fast_forward_started).count();
+  REXLOG_INFO("Fast post-race: {} done in {:.2f} s ({})", FastForwardName(kind), real, why);
+}
+
+void EndFastForward(FastForward kind, const char* why, uint32_t screen = 0) {
+  std::lock_guard lock(g_fast_forward_mutex);
+  if (g_fast_forward != kind) return;
+  if (screen && screen != g_fast_forward_screen) return;
+  EndFastForwardLocked(why);
+}
+
+// One thread for every run: it holds the clock at normal while a popup is over the screen (that time does not count)
+// and ends a run whose end never comes.
+void FastForwardMonitor() {
+  constexpr auto kLook = std::chrono::milliseconds(16);
+  std::unique_lock lock(g_fast_forward_mutex);
+  auto last = std::chrono::steady_clock::now();
+  for (;;) {
+    g_fast_forward_wake.wait(lock, [] { return g_fast_forward_stop || g_fast_forward != FastForward::kNone; });
+    if (g_fast_forward_stop) return;
+    g_fast_forward_wake.wait_for(lock, kLook, [] { return g_fast_forward_stop; });
+    if (g_fast_forward_stop) return;
+    const auto now = std::chrono::steady_clock::now();
+    const auto step = now - last;
+    last = now;
+    if (g_fast_forward == FastForward::kNone) continue;
+    const uint8_t* const base = rex::system::kernel_state()->memory()->virtual_membase();
+    const bool popup = g_fast_forward_screen && LoadGuestWord(base, g_fast_forward_screen + kScreenPopup) != 0;
+    const bool fast = !popup && now >= g_fast_forward_hold_until;
+    if (fast != g_fast_forward_running) {
+      g_fast_forward_running = fast;
+      rex::chrono::Clock::set_guest_time_scalar(fast ? kFastForwardScale : 1.0);
+    }
+    if (popup) {
+      g_fast_forward_deadline += std::chrono::duration_cast<std::chrono::steady_clock::duration>(step);
+    } else if (now >= g_fast_forward_deadline) {
+      EndFastForwardLocked("watchdog");
+    }
+  }
+}
+
+void StartFastForward(FastForward kind, uint32_t screen) {
+  if (!FastForwardWanted(kind)) return;
+  {
+    std::lock_guard lock(g_fast_forward_mutex);
+    if (g_fast_forward != FastForward::kNone || g_fast_forward_stop) return;
+    const auto now = std::chrono::steady_clock::now();
+    g_fast_forward = kind;
+    g_fast_forward_screen = screen;
+    g_fast_forward_started = now;
+    g_fast_forward_hold_until = kind == FastForward::kXpBars ? now + kXpScreenSettle : now;
+    g_fast_forward_deadline = g_fast_forward_hold_until + kFastForwardWatchdog;
+    g_fast_forward_running = kind == FastForward::kGlobe;
+    if (g_fast_forward_running) rex::chrono::Clock::set_guest_time_scalar(kFastForwardScale);
+    if (!g_fast_forward_monitor.joinable()) g_fast_forward_monitor = std::thread(FastForwardMonitor);
+  }
+  g_fast_forward_wake.notify_one();
+  REXLOG_INFO("Fast post-race: {} at {}x", FastForwardName(kind), kFastForwardScale);
+}
+
+}  // namespace
+
+void fm4_static_recomp::StopFastPostRace() {
+  {
+    std::lock_guard lock(g_fast_forward_mutex);
+    g_fast_forward_stop = true;
+    if (g_fast_forward != FastForward::kNone) EndFastForwardLocked("shutdown");
+  }
+  g_fast_forward_wake.notify_one();
+  if (g_fast_forward_monitor.joinable()) g_fast_forward_monitor.join();
+}
+
+void Fm4WorldTourSceneEvent(PPCRegister& r3, PPCRegister& r4) {
+  FM4_HOOK_CENSUS();
+  if (r4.u32 == kReadyForEventSelect) {
+    EndFastForward(FastForward::kGlobe, "ready");
+    return;
+  }
+  // Partway after a race, before the spin: with something to present, it plays at the normal speed.
+  const uint8_t* const base = rex::system::kernel_state()->memory()->virtual_membase();
+  if (r4.u32 == LoadGuestWord(base, fm4_guest::kWorldTourReadyForTrophy) &&
+      LoadGuestWord(base, r3.u32 + kWorldTourAwardsBegin) != LoadGuestWord(base, r3.u32 + kWorldTourAwardsEnd)) {
+    EndFastForward(FastForward::kGlobe, "an award to show");
+  }
+}
+
+void Fm4WorldTourIntroEnter(PPCRegister& r31) {
+  FM4_HOOK_CENSUS();
+  StartFastForward(FastForward::kGlobe, r31.u32);
+}
+
+void Fm4WorldTourIntroPostRace(PPCRegister& r31) {
+  FM4_HOOK_CENSUS();
+  StartFastForward(FastForward::kGlobe, r31.u32);
+}
+
+void Fm4WorldTourPostRaceAnimate(PPCRegister& r31) {
+  FM4_HOOK_CENSUS();
+  StartFastForward(FastForward::kGlobe, r31.u32);
+}
+
+void Fm4XpScreenCreated(PPCRegister& r3) {
+  FM4_HOOK_CENSUS();
+  if (r3.u32) StartFastForward(FastForward::kXpBars, r3.u32);
+}
+
+void Fm4XpBarsDone(PPCRegister& r31) {
+  FM4_HOOK_CENSUS();
+  EndFastForward(FastForward::kXpBars, "bars filled", r31.u32);
+}
+
+void Fm4XpScreenDestroyed(PPCRegister& r3) {
+  FM4_HOOK_CENSUS();
+  EndFastForward(FastForward::kXpBars, "screen closed", r3.u32);
 }
 
 void Fm4ShowroomCameraStep(PPCRegister& f1) {
