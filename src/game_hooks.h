@@ -74,4 +74,9 @@ inline constexpr uint16_t kExitToDesktopStringKey = 0x7159;
 inline constexpr uint16_t kExitToDesktopQuestionKey = 0x715A;
 inline constexpr uint16_t kExitStringKey = 0x715B;  // the main menu's prompt: EXIT
 
+// AUTO RESTART ON DIRTY LAP: the game has marked the player's lap dirty (off the track, into a
+// wall or contact: the lap timer's warning), in a session asked for: `alone` with no AI cars on
+// track (Hot Lap), `against_ai` in a race with them.
+bool PlayerLapDirty(bool alone, bool against_ai);
+
 }  // namespace fm4_static_recomp

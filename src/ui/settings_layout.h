@@ -20,6 +20,7 @@ enum class SettingRow {
   kRacePayouts,
   kRepairCosts,
   kResaleValue,
+  kAutoRestart,
   kDecalsFolder,
   kAllSponsors,
   kTrackSignage,
@@ -40,7 +41,7 @@ struct SettingsLayout {
   SettingsTab mod;
 };
 
-inline constexpr size_t kActiveSettingsLayout = 2;
+inline constexpr size_t kActiveSettingsLayout = 0;
 
 inline const std::array<SettingsLayout, 3>& SettingsLayouts() {
   using enum SettingRow;
@@ -51,7 +52,7 @@ inline const std::array<SettingsLayout, 3>& SettingsLayouts() {
          {"MODS", {kModMenu}}}},
        {"MODS",
         {{"RACING", {kQuickRestart, kQuickRestartButton, kQuickRestartTrigger}},
-         {"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue}},
+         {"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue, kAutoRestart}},
          {"MENUS/UI", {kFastPostRace, kOnlineItems, kNarrator}},
          {"LIVERY", {kDecalsFolder, kAllSponsors}},
          {"TRACKS", {kTrackSignage}}}}},
@@ -60,7 +61,7 @@ inline const std::array<SettingsLayout, 3>& SettingsLayouts() {
         {{"RACING", {kQuickRaceLaps, kQuickRestart, kQuickRestartButton, kQuickRestartTrigger}},
          {"MODS", {kModMenu}}}},
        {"MODS",
-        {{"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue}},
+        {{"HARDCORE", {kRacePayouts, kRepairCosts, kResaleValue, kAutoRestart}},
          {"MENUS/UI", {kFastPostRace, kOnlineItems, kNarrator}},
          {"PAINT", {kDecalsFolder, kAllSponsors}},
          {"TRACKS", {kTrackSignage}}}}},
@@ -70,7 +71,7 @@ inline const std::array<SettingsLayout, 3>& SettingsLayouts() {
          {"MODS", {kModMenu}}}},
        {"MODS",
         {{"GO RACE", {kQuickRestart, kQuickRestartButton, kQuickRestartTrigger}},
-         {"CAREER", {kRacePayouts, kRepairCosts, kResaleValue}},
+         {"CAREER", {kRacePayouts, kRepairCosts, kResaleValue, kAutoRestart}},
          {"MENUS/UI", {kFastPostRace, kOnlineItems, kNarrator}},
          {"PAINT", {kDecalsFolder, kAllSponsors}},
          {"TRACKS", {kTrackSignage}}}}},
@@ -87,7 +88,7 @@ inline SettingsTab EverySettingOnOnePage() {
           {{nullptr,
             {kQuickRaceLaps, kQuickRestart, kQuickRestartButton, kQuickRestartTrigger, kNarrator, kOnlineItems,
              kFastPostRace, kRacePayouts, kRepairCosts, kResaleValue, kDecalsFolder, kAllSponsors, kTrackSignage,
-             kModMenu}}}};
+             kModMenu, kAutoRestart}}}};
 }
 
 }  // namespace fm4_static_recomp::ui

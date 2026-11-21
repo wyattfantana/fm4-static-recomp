@@ -62,6 +62,7 @@ std::function<void()> g_tabs_changed;
 constexpr const char* kLaps = "fm4_quick_race_laps";
 constexpr const char* kQuickRestart = "fm4_quick_restart";
 constexpr const char* kRestartTrigger = "fm4_quick_restart_trigger";
+constexpr const char* kAutoRestart = "fm4_auto_restart_dirty_lap";
 constexpr const char* kMuteNarrator = "fm4_mute_narrator";
 constexpr const char* kHideOnlineItems = "fm4_hide_online_items";
 constexpr const char* kDecalsFolder = "fm4_custom_decals_folder";
@@ -83,6 +84,21 @@ int ButtonIndex(std::string_view name) {
     if (kButtons[i].first == name) return int(i);
   }
   return -1;
+}
+
+// AUTO RESTART ON DIRTY LAP's settings, as fm4_auto_restart_dirty_lap names them, and as shown.
+constexpr std::array<std::pair<std::string_view, std::string_view>, 4> kAutoRestarts = {{
+    {"off", "OFF"},
+    {"hot_lap", "HOT LAP"},
+    {"races", "RACES"},
+    {"all", "HOT LAP + RACES"},
+}};
+
+int AutoRestartIndex(std::string_view name) {
+  for (size_t i = 0; i < kAutoRestarts.size(); ++i) {
+    if (kAutoRestarts[i].first == name) return int(i);
+  }
+  return 0;
 }
 
 std::mutex g_picker_mutex;
@@ -210,7 +226,7 @@ struct Draft {
   void Store(const std::string& name, const std::string& value) {
     // A setting at its default is no line in the file.
     const bool is_default = name == kLaps                                  ? value == "0"
-                            : name == kQuickRestart || name == kFastPostRace ? value == "off"
+                            : name == kQuickRestart || name == kFastPostRace || name == kAutoRestart ? value == "off"
                             : name == kRestartTrigger                       ? value == "hold"
                             : name == kDecalsFolder                         ? value.empty()
                             : name == kHideOnlineItems || name == kMuteNarrator || name == kAllSponsors ||
@@ -219,7 +235,7 @@ struct Draft {
                                 : value == "100";  // a HARDCORE setting
     if (is_default) {
       config.Remove(name);
-    } else if (name == kQuickRestart || name == kRestartTrigger) {
+    } else if (name == kQuickRestart || name == kRestartTrigger || name == kAutoRestart) {
       config.Set(name, "\"" + value + "\"");
     } else if (name == kDecalsFolder) {
       config.Set(name, config::Quote(value));
@@ -523,6 +539,27 @@ MenuRow HardcoreRow(const std::shared_ptr<Draft>& draft, const HardcoreSetting& 
   return row;
 }
 
+MenuRow AutoRestartRow(const std::shared_ptr<Draft>& draft) {
+  MenuRow row;
+  row.label = "AUTO RESTART ON DIRTY LAP";
+  row.description =
+      "A lap the game marks dirty (off the track, into a wall or contact: the warning by the lap "
+      "time) restarts at once, as QUICK RESTART does. HOT LAP: alone on track. RACES: in races "
+      "against AI cars, in Free Play and the career; the whole race restarts. Needs QUICK RESTART on.";
+  row.value = [draft] {
+    return std::string(kAutoRestarts[size_t(AutoRestartIndex(draft->Value(kAutoRestart)))].second);
+  };
+  row.adjust = [draft](int direction) {
+    const int index =
+        hostui::StepIndex(AutoRestartIndex(draft->Value(kAutoRestart)), int(kAutoRestarts.size()), direction);
+    draft->Change(kAutoRestart, std::string(kAutoRestarts[size_t(index)].first));
+  };
+  row.enabled = [draft] { return draft->RestartOn(); };
+  row.badge = [] { return LaunchOptionBadge(kAutoRestart); };
+  row.unapplied = [draft] { return draft->pending.contains(kAutoRestart); };
+  return row;
+}
+
 MenuRow SignageRow(const std::shared_ptr<Draft>& draft) {
   MenuRow row;
   row.label = "TRACK SIGNAGE";
@@ -574,6 +611,7 @@ void AddRow(std::vector<MenuRow>& rows, SettingRow setting, const std::shared_pt
     case SettingRow::kRacePayouts: hardcore(0); break;
     case SettingRow::kRepairCosts: hardcore(1); break;
     case SettingRow::kResaleValue: hardcore(2); break;
+    case SettingRow::kAutoRestart: rows.push_back(AutoRestartRow(draft)); break;
     case SettingRow::kDecalsFolder: rows.push_back(DecalsFolderRow(draft, picked)); break;
     case SettingRow::kAllSponsors: rows.push_back(AllSponsorsRow(draft)); break;
     case SettingRow::kTrackSignage: rows.push_back(SignageRow(draft)); break;
@@ -706,6 +744,14 @@ void ApplySavedGameplaySettings(const config::HostConfig& config) {
   }
   if (const auto value = config.Get(kRestartTrigger); value && !FromCommandLine(kRestartTrigger)) {
     rex::cvar::SetFlagByName(kRestartTrigger, *value == "tap" ? "tap" : "hold");
+  }
+  if (const auto value = config.Get(kAutoRestart); value && !FromCommandLine(kAutoRestart)) {
+    if (std::any_of(kAutoRestarts.begin(), kAutoRestarts.end(), [&](const auto& e) { return e.first == *value; })) {
+      rex::cvar::SetFlagByName(kAutoRestart, *value);
+      REXLOG_INFO("Gameplay settings: {} = {}", kAutoRestart, *value);
+    } else {
+      REXLOG_WARN("Gameplay settings: ignored {} = {}", kAutoRestart, *value);
+    }
   }
   for (const char* name : {kMuteNarrator, kHideOnlineItems, kAllSponsors, kModMenu}) ApplySavedBool(config, name);
   if (const auto value = config.Get(kDecalsFolder); value && !FromCommandLine(kDecalsFolder)) {

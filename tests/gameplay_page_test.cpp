@@ -26,6 +26,8 @@ namespace config = fm4_static_recomp::config;
 namespace ui = fm4_static_recomp::ui;
 using fm4_static_recomp::QuickRaceLaps;
 using fm4_static_recomp::QuickRaceLapsQuery;
+using fm4_static_recomp::AutoRestart;
+using fm4_static_recomp::ConfiguredAutoRestart;
 using fm4_static_recomp::ConfiguredQuickRestartButton;
 using fm4_static_recomp::QuickRaceLapsSetting;
 using fm4_static_recomp::QuickRestartTap;
@@ -61,6 +63,7 @@ struct Page {
     rex::cvar::SetFlagByName("fm4_hide_online_items", "false");
     rex::cvar::SetFlagByName("fm4_fast_post_race", "off");
     rex::cvar::SetFlagByName("fm4_mod_menu", "false");
+    rex::cvar::SetFlagByName("fm4_auto_restart_dirty_lap", "off");
     for (const char* name : {"fm4_race_payouts", "fm4_repair_costs", "fm4_resale_value"}) {
       rex::cvar::SetFlagByName(name, "100");
     }
@@ -367,6 +370,57 @@ TEST_CASE("Saved HARDCORE settings are applied at startup, ones out of range ign
   CHECK(rex::cvar::GetFlagByName("fm4_repair_costs") == "100");
 }
 
+TEST_CASE("AUTO RESTART ON DIRTY LAP is off by default and greyed out until QUICK RESTART is on",
+          "[gameplay_page]") {
+  Page page("");
+  const auto& rows = page.screen->rows();
+  CHECK(rows[14].label == "AUTO RESTART ON DIRTY LAP");
+  CHECK(page.Value(14) == "OFF");
+  CHECK_FALSE(rows[14].is_enabled());
+  CHECK_FALSE(page.screen->SetFocus(14));  // greyed out: it can't be selected
+  page.Step(1, NavCommand::kRight);  // QUICK RESTART on
+  CHECK(rows[14].is_enabled());
+  page.Step(14, NavCommand::kRight);
+  CHECK(page.Value(14) == "HOT LAP");
+  CHECK(rows[14].unapplied());
+  CHECK(ConfiguredAutoRestart() == AutoRestart::kOff);
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(page.File() ==
+        "fm4_auto_restart_dirty_lap = \"hot_lap\"\nfm4_quick_restart = \"dpad_left\"\n");
+  CHECK(ConfiguredAutoRestart() == AutoRestart::kHotLap);
+  page.Step(1, NavCommand::kRight);  // QUICK RESTART off again: greyed out, its value kept
+  CHECK_FALSE(rows[14].is_enabled());
+  CHECK(page.Value(14) == "HOT LAP");
+}
+
+TEST_CASE("AUTO RESTART ON DIRTY LAP goes through HOT LAP, RACES and both", "[gameplay_page]") {
+  Page page("fm4_quick_restart = \"dpad_left\"\n");
+  ui::ApplySavedGameplaySettings(page.config);
+  page.Step(14, NavCommand::kRight);
+  CHECK(page.Value(14) == "HOT LAP");
+  page.Step(14, NavCommand::kRight);
+  CHECK(page.Value(14) == "RACES");
+  page.Step(14, NavCommand::kRight);
+  CHECK(page.Value(14) == "HOT LAP + RACES");
+  page.screen->Handle(NavCommand::kApply);
+  CHECK(ConfiguredAutoRestart() == AutoRestart::kAll);
+  page.Step(14, NavCommand::kLeft);
+  CHECK(page.Value(14) == "RACES");
+}
+
+TEST_CASE("A saved AUTO RESTART is applied at startup, a bad one ignored", "[gameplay_page]") {
+  {
+    Page page("fm4_auto_restart_dirty_lap = \"races\"\n");
+    ui::ApplySavedGameplaySettings(page.config);
+    CHECK(ConfiguredAutoRestart() == AutoRestart::kRaces);
+    CHECK(page.Value(14) == "RACES");
+  }
+  Page page("fm4_auto_restart_dirty_lap = \"often\"\n");
+  ui::ApplySavedGameplaySettings(page.config);
+  CHECK(ConfiguredAutoRestart() == AutoRestart::kOff);
+  CHECK(page.Value(14) == "OFF");
+}
+
 TEST_CASE("Every layout has every setting exactly once", "[gameplay_page]") {
   using ui::SettingRow;
   for (const ui::SettingsLayout& layout : ui::SettingsLayouts()) {
@@ -378,16 +432,16 @@ TEST_CASE("Every layout has every setting exactly once", "[gameplay_page]") {
     }
     for (int row = 0; row <= int(SettingRow::kTrackSignage); ++row) CHECK(count[SettingRow(row)] == 1);
     // The switch is there only when it has a tab to show.
-    CHECK(count[SettingRow::kModMenu] == (layout.mod.title == std::string("MOD MENU") ? 1 : 0));
+    CHECK(count[SettingRow::kModMenu] == (layout.mod.sections.empty() ? 0 : 1));
   }
 }
 
-TEST_CASE("The MOD MENU switch sits last on GAME and brings its tab", "[gameplay_page]") {
+TEST_CASE("The MODS switch sits last on GAME and brings its tab", "[gameplay_page]") {
   Page page("");
   CHECK(ui::SettingsPages().size() == 1);
   auto game = ui::CreateSettingsPage(false, page.config);
   CHECK(game->title() == "GAME");
-  REQUIRE(game->rows().back().label == "MOD MENU");
+  REQUIRE(game->rows().back().label == "SHOW MODS TAB");
   CHECK(game->rows().back().value() == "OFF");
   REQUIRE(game->SetFocus(game->rows().size() - 1));
   game->Handle(NavCommand::kRight);
@@ -400,9 +454,9 @@ TEST_CASE("The MOD MENU switch sits last on GAME and brings its tab", "[gameplay
   CHECK(changed == 1);
   CHECK(page.File() == "fm4_mod_menu = true\n");
   REQUIRE(ui::SettingsPages().size() == 2);
-  CHECK(ui::SettingsPages()[1].title == "MOD MENU");
+  CHECK(ui::SettingsPages()[1].title == "MODS");
   CHECK(ui::SettingsPages()[1].mod);
-  CHECK(ui::CreateSettingsPage(true, page.config)->title() == "MOD MENU");
+  CHECK(ui::CreateSettingsPage(true, page.config)->title() == "MODS");
   game->Handle(NavCommand::kRight);  // off again: its line goes
   game->Handle(NavCommand::kApply);
   CHECK(page.File().find("fm4_mod_menu") == std::string::npos);
