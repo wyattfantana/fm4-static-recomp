@@ -177,9 +177,7 @@ void SetBackPrompt(PPCContext& ctx, uint8_t* base, uint32_t caller_stack, uint32
     std::lock_guard lock(g_alone_mutex);
     full = g_back_alone && g_back_alone();
   }
-  // BACK alone takes the pad's BACK icon (hidden then, as every icon is): laid out with it, the full text sits
-  // inside the bar's end.
-  const bool pad = exit && (g_pad_prompts || full);
+  const bool pad = exit && g_pad_prompts;
   if (bar == g_labelled_bar && exit == g_label_exit && pad == g_label_pad && full == g_label_full) return;
   const uint32_t source = Word(base, bar + kBarSource), style = Word(base, bar + kBarStyle);
   if (!GuestPointer(source) || style > 2) return;
