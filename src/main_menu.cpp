@@ -312,9 +312,9 @@ bool BackPressed(uint32_t splash) {
   return true;
 }
 
-void Frame(PPCContext& ctx, uint8_t* base, uint32_t screen, uint32_t stack) {
+void Frame(PPCContext& ctx, uint8_t* base, uint32_t stack) {
   const uint32_t splash = g_splash;
-  if (!Enabled() || screen != splash || Word(base, splash) != kSplashVtable) return;
+  if (!Enabled() || !GuestPointer(splash) || Word(base, splash) != kSplashVtable) return;
   const uint32_t bar = Word(base, splash + kBar);
   if (!GuestPointer(bar)) {
     g_labelled_bar = 0;  // set again once the bar is back (the game may have rebuilt it)

@@ -1,6 +1,7 @@
 // Copyright (c) 2026, i2kiselev
 // BSD 3-Clause License: see LICENSE in the repository root.
 #include "menu_mouse.h"
+#include "main_menu.h"
 
 #include <algorithm>
 #include <array>
@@ -2471,5 +2472,6 @@ void Fm4UiContainerDestroyed(PPCRegister& r3) {
 
 // The Natal cursor's update, once a UI frame on the game thread (r1: its caller's stack).
 void Fm4UiCursorFrame(PPCContext& ctx, uint8_t* base, PPCRegister& r1) {
+  fm4_static_recomp::main_menu::Frame(ctx, base, r1.u32);  // #126's hook here: one hook per address
   fm4_static_recomp::menu_mouse::Frame(ctx, base, r1.u32);
 }
