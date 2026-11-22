@@ -343,7 +343,8 @@ class Fm4App final : public rex::ReXApp {
     fm4_static_recomp::signage::Start(gameplay_config_->path().parent_path().parent_path() / "signage",
                                       game_data_root(), gameplay_config_->path().parent_path() / "signage.toml");
     // Sharper track textures (PC OPTIONS > MODS > TRACK CUSTOMISATION): kept in <state>\track-textures.
-    fm4_static_recomp::track_textures::Start(gameplay_config_->path().parent_path().parent_path(), game_data_root());
+    fm4_static_recomp::track_textures::Start(gameplay_config_->path().parent_path().parent_path(), game_data_root(),
+                                             gameplay_config_->path().parent_path() / "track-textures.toml");
   }
 
   bool WantsPresentation() const override {

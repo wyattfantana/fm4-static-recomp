@@ -242,6 +242,93 @@ std::shared_ptr<const RuntimeImage> DeserializeImage(std::span<const uint8_t> da
   return image;
 }
 
+namespace {
+
+constexpr const char* kNames[] = {"fm4_track_textures", "fm4_road_surface", "fm4_grass_texture"};
+
+bool FromCommandLine(const char* name) {
+  return rex::cvar::GetFlagSource(name) == rex::cvar::Source::kCommandLine;
+}
+
+std::mutex g_settings_mutex;
+std::filesystem::path g_settings_file;
+
+Scale* Field(Settings& settings, size_t i) { return i == 0 ? &settings.track : i == 1 ? &settings.road : &settings.grass; }
+
+}  // namespace
+
+std::string FormatSettings(const Settings& settings) {
+  std::string text;
+  Settings copy = settings;
+  for (size_t i = 0; i < 3; ++i) {
+    const Scale scale = *Field(copy, i);
+    if (scale != Scale::kDefault) text += std::string(kNames[i]) + " = \"" + std::string(ScaleName(scale)) + "\"\n";
+  }
+  return text;
+}
+
+Settings ParseSettings(std::string_view text) {
+  Settings settings;
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t end = std::min(text.find('\n', at), text.size());
+    std::string_view line = text.substr(at, end - at);
+    at = end + 1;
+    const size_t eq = line.find('=');
+    if (eq == std::string_view::npos) continue;
+    auto trim = [](std::string_view v) {
+      while (!v.empty() && (v.front() == ' ' || v.front() == '"')) v.remove_prefix(1);
+      while (!v.empty() && (v.back() == ' ' || v.back() == '"' || v.back() == '\r')) v.remove_suffix(1);
+      return v;
+    };
+    const std::string_view key = trim(line.substr(0, eq)), value = trim(line.substr(eq + 1));
+    for (size_t i = 0; i < 3; ++i) {
+      if (key == kNames[i]) {
+        if (const auto scale = ParseScale(value)) *Field(settings, i) = *scale;
+      }
+    }
+  }
+  return settings;
+}
+
+Settings CurrentSettings() {
+  Settings settings;
+  for (size_t i = 0; i < 3; ++i) *Field(settings, i) = ParseScale(rex::cvar::GetFlagByName(kNames[i])).value_or(Scale::kDefault);
+  return settings;
+}
+
+void SetSettingsFile(const std::filesystem::path& file) {
+  std::lock_guard lock(g_settings_mutex);
+  g_settings_file = file;
+}
+
+bool SaveSettings(const Settings& settings) {
+  std::filesystem::path file;
+  {
+    std::lock_guard lock(g_settings_mutex);
+    file = g_settings_file;
+  }
+  if (!file.empty()) {
+    std::error_code ec;
+    std::filesystem::create_directories(file.parent_path(), ec);
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    out << FormatSettings(settings);
+    if (!out) {
+      REXLOG_ERROR("Track textures: could not write {}", rex::path_to_utf8(file));
+      return false;
+    }
+  }
+  Settings copy = settings;
+  for (size_t i = 0; i < 3; ++i) {
+    if (FromCommandLine(kNames[i])) continue;
+    rex::cvar::SetFlagByName(kNames[i], std::string(ScaleName(*Field(copy, i))));
+  }
+  REXLOG_INFO("Track textures: TRACK TEXTURES {}, ROAD SURFACE {}, GRASS {}", ScaleName(settings.track),
+              ScaleName(settings.road), ScaleName(settings.grass));
+  Apply();
+  return true;
+}
+
 // ---- The running side ----
 namespace {
 
@@ -557,7 +644,19 @@ void Worker() {
 
 }  // namespace
 
-void Start(const std::filesystem::path& state_root, const std::filesystem::path& game_root) {
+void Start(const std::filesystem::path& state_root, const std::filesystem::path& game_root,
+           const std::filesystem::path& settings_file) {
+  SetSettingsFile(settings_file);
+  if (const auto data = ReadFile(settings_file)) {
+    Settings saved = ParseSettings(std::string_view(reinterpret_cast<const char*>(data->data()), data->size()));
+    for (size_t i = 0; i < 3; ++i) {
+      if (FromCommandLine(kNames[i])) {
+        REXLOG_INFO("Track textures: {} comes from the command line", kNames[i]);
+        continue;
+      }
+      rex::cvar::SetFlagByName(kNames[i], std::string(ScaleName(*Field(saved, i))));
+    }
+  }
   State& state = GetState();
   std::lock_guard lock(state.mutex);
   if (state.started) return;

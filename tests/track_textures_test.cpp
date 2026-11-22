@@ -126,3 +126,15 @@ TEST_CASE("BC1 keeps cut-out texels transparent", "[track_textures]") {
   CHECK((blocks[4] & 3) == 3);   // the cut-out texel: transparent black
   CHECK(((blocks[4] >> 2) & 3) != 3);
 }
+
+TEST_CASE("The texture settings' file: a line per setting not at default, read back", "[track_textures]") {
+  tt::Settings settings;
+  CHECK(tt::FormatSettings(settings).empty());
+  settings.track = tt::Scale::k2x;
+  settings.grass = tt::Scale::k4x;
+  const std::string text = tt::FormatSettings(settings);
+  CHECK(text == "fm4_track_textures = \"2x\"\nfm4_grass_texture = \"4x\"\n");
+  CHECK(tt::ParseSettings(text) == settings);
+  CHECK(tt::ParseSettings("fm4_road_surface = \"3x\"\r\nnonsense\nfm4_track_textures = 4x\r\n").track == tt::Scale::k4x);
+  CHECK(tt::ParseSettings("fm4_road_surface = \"3x\"\n").road == tt::Scale::kDefault);
+}

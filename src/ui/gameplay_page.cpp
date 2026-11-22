@@ -243,9 +243,9 @@ struct Draft {
                                 : value == "100";  // a DIFFICULTY setting
     if (is_default) {
       config.Remove(name);
-    } else if (IsTextureSetting(name) && value == "default") {
-      config.Remove(name);
-    } else if (name == kQuickRestart || name == kRestartTrigger || name == kAutoRestart || IsTextureSetting(name)) {
+    } else if (IsTextureSetting(name)) {
+      return;  // kept in track-textures.toml (track_textures::SaveSettings)
+    } else if (name == kQuickRestart || name == kRestartTrigger || name == kAutoRestart) {
       config.Set(name, "\"" + value + "\"");
     } else if (name == kDecalsFolder) {
       config.Set(name, config::Quote(value));
@@ -266,7 +266,7 @@ struct Draft {
     }
     bool decals_changed = false, tabs_changed = false, textures_changed = false;
     for (const auto& [name, value] : pending) {
-      rex::cvar::SetFlagByName(name, value);
+      if (!IsTextureSetting(name)) rex::cvar::SetFlagByName(name, value);
       REXLOG_INFO("Gameplay page: {} = {}", name, value);
       if (name == kMuteNarrator && !game_data_root.empty()) {
         // The game loaded the narrator's bank as it started: it is changed where it is.
@@ -281,7 +281,12 @@ struct Draft {
       decals::SetSettings({REXCVAR_GET(fm4_custom_decals_folder), REXCVAR_GET(fm4_all_sponsor_decals)});
       decals::ApplyCustomDecals();
     }
-    if (textures_changed) track_textures::Apply();
+    if (textures_changed) {
+      const auto scale = [this](const char* name) {
+        return track_textures::ParseScale(Value(name)).value_or(track_textures::Scale::kDefault);
+      };
+      track_textures::SaveSettings({scale(kTrackTextures), scale(kRoadSurface), scale(kGrassTexture)});
+    }
     pending.clear();
     leave_warned = false;
     applied = true;
@@ -581,7 +586,7 @@ MenuRow SignageRow(const std::shared_ptr<Draft>& draft) {
     return shown ? "CUSTOM (" + std::to_string(shown) + (shown == 1 ? " BOARD)" : " BOARDS)") : std::string("DEFAULT");
   };
   row.adjust = [draft](int direction) {
-    if (direction > 0) draft->screen->OpenPage([] { return CreateSignagePage(); });
+    if (direction > 0) draft->screen->OpenPage([] { return CreateSignagePage(false); });
   };
   return row;
 }
@@ -807,15 +812,6 @@ void ApplySavedGameplaySettings(const config::HostConfig& config) {
     }
   }
   for (const char* name : {kMuteNarrator, kHideOnlineItems, kAllSponsors, kModMenu}) ApplySavedBool(config, name);
-  for (const char* name : {kTrackTextures, kRoadSurface, kGrassTexture}) {
-    const auto value = config.Get(name);
-    if (!value || FromCommandLine(name)) continue;
-    if (track_textures::ParseScale(*value) && rex::cvar::SetFlagByName(name, *value)) {
-      REXLOG_INFO("Gameplay settings: {} = {}", name, *value);
-    } else {
-      REXLOG_WARN("Gameplay settings: ignored {} = {}", name, *value);
-    }
-  }
   if (const auto value = config.Get(kDecalsFolder); value && !FromCommandLine(kDecalsFolder)) {
     rex::cvar::SetFlagByName(kDecalsFolder, *value);
     REXLOG_INFO("Gameplay settings: {} = {}", kDecalsFolder, *value);

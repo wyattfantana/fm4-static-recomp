@@ -58,8 +58,25 @@ std::shared_ptr<const rex::graphics::texture_replacement::RuntimeImage> Finish(c
 std::vector<uint8_t> SerializeImage(const rex::graphics::texture_replacement::RuntimeImage& image);
 std::shared_ptr<const rex::graphics::texture_replacement::RuntimeImage> DeserializeImage(std::span<const uint8_t> data);
 
-// The running side. `state_root` holds the results and the upscaler; `game_root` Media\Tracks.
-void Start(const std::filesystem::path& state_root, const std::filesystem::path& game_root);
+// The three settings, kept in their own file (config\track-textures.toml) whichever page sets them.
+struct Settings {
+  Scale track = Scale::kDefault, road = Scale::kDefault, grass = Scale::kDefault;
+  bool operator==(const Settings&) const = default;
+};
+std::string FormatSettings(const Settings& settings);  // a line per setting not at default
+Settings ParseSettings(std::string_view text);         // unknown lines and values ignored
+// As set now (a launch option included).
+Settings CurrentSettings();
+// Writes the file and sets them at once (a setting a launch option gave stays as given this session);
+// false when the file could not be written.
+bool SaveSettings(const Settings& settings);
+// Where SaveSettings writes, without starting the worker (the pages' tests).
+void SetSettingsFile(const std::filesystem::path& file);
+
+// The running side. `state_root` holds the results and the upscaler; `game_root` Media\Tracks; `settings_file`
+// the three settings, read now.
+void Start(const std::filesystem::path& state_root, const std::filesystem::path& game_root,
+           const std::filesystem::path& settings_file);
 // The settings changed (SAVE & APPLY): shows what is made, and upscales what is missing.
 void Apply();
 void Stop();
