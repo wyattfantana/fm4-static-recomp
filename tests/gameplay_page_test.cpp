@@ -313,7 +313,7 @@ TEST_CASE("A saved FAST POST-RACE is applied at startup, a bad one ignored", "[g
   CHECK(rex::cvar::GetFlagByName("fm4_fast_post_race") == "off");
 }
 
-TEST_CASE("CAREER DIFFICULTY has its three settings, each DEFAULT", "[gameplay_page]") {
+TEST_CASE("DIFFICULTY has its three settings, each DEFAULT", "[gameplay_page]") {
   Page page("");
   fm4_static_recomp::InstallHardcoreOptions({});  // the game started with them all off
   const auto& rows = page.screen->rows();
@@ -326,7 +326,7 @@ TEST_CASE("CAREER DIFFICULTY has its three settings, each DEFAULT", "[gameplay_p
   }
 }
 
-TEST_CASE("CAREER DIFFICULTY settings step through their choices and save for the next start",
+TEST_CASE("DIFFICULTY settings step through their choices and save for the next start",
           "[gameplay_page]") {
   Page page("");
   fm4_static_recomp::InstallHardcoreOptions({});
@@ -354,7 +354,7 @@ TEST_CASE("CAREER DIFFICULTY settings step through their choices and save for th
   CHECK(rows[7].note() == "");
 }
 
-TEST_CASE("Saved CAREER DIFFICULTY settings are applied at startup, ones out of range ignored",
+TEST_CASE("Saved DIFFICULTY settings are applied at startup, ones out of range ignored",
           "[gameplay_page]") {
   {
     Page page("fm4_race_payouts = 75\nfm4_resale_value = 50\n");

@@ -116,7 +116,7 @@ struct PickedFolder {
 constexpr std::pair<std::string_view, std::string_view> kFastPostRaceValues[] = {
     {"off", "OFF"}, {"globe", "GLOBE"}, {"all", "GLOBE + XP BARS"}};
 
-// The CAREER DIFFICULTY settings (src/hardcore.h), each a few choices, the first the default.
+// The DIFFICULTY settings (src/hardcore.h), each a few choices, the first the default.
 struct Choice {
   const char* value;  // as fm4_* takes it
   const char* label;
@@ -232,7 +232,7 @@ struct Draft {
                             : name == kHideOnlineItems || name == kMuteNarrator || name == kAllSponsors ||
                                     name == kModMenu
                                 ? value == "false"
-                                : value == "100";  // a CAREER DIFFICULTY setting
+                                : value == "100";  // a DIFFICULTY setting
     if (is_default) {
       config.Remove(name);
     } else if (name == kQuickRestart || name == kRestartTrigger || name == kAutoRestart) {
