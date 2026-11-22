@@ -25,6 +25,8 @@
 #include "quick_race_laps.h"
 #include "ui/settings_layout.h"
 #include "ui/signage_page.h"
+#include "track_signage_runtime.h"
+#include "track_textures.h"
 
 REXCVAR_DEFINE_BOOL(fm4_hide_online_items, false, "Forza Motorsport 4",
                     "Leaves the menu items that need Xbox LIVE or the Forza servers off the "
@@ -68,6 +70,12 @@ constexpr const char* kHideOnlineItems = "fm4_hide_online_items";
 constexpr const char* kDecalsFolder = "fm4_custom_decals_folder";
 constexpr const char* kAllSponsors = "fm4_all_sponsor_decals";
 constexpr const char* kFastPostRace = "fm4_fast_post_race";
+constexpr const char* kTrackTextures = "fm4_track_textures";
+constexpr const char* kRoadSurface = "fm4_road_surface";
+constexpr const char* kGrassTexture = "fm4_grass_texture";
+bool IsTextureSetting(const std::string& name) {
+  return name == kTrackTextures || name == kRoadSurface || name == kGrassTexture;
+}
 constexpr const char* kModMenu = "fm4_mod_menu";
 
 // The pad buttons QUICK RESTART can use, as fm4_quick_restart names them, and as shown: the
@@ -235,7 +243,9 @@ struct Draft {
                                 : value == "100";  // a DIFFICULTY setting
     if (is_default) {
       config.Remove(name);
-    } else if (name == kQuickRestart || name == kRestartTrigger || name == kAutoRestart) {
+    } else if (IsTextureSetting(name) && value == "default") {
+      config.Remove(name);
+    } else if (name == kQuickRestart || name == kRestartTrigger || name == kAutoRestart || IsTextureSetting(name)) {
       config.Set(name, "\"" + value + "\"");
     } else if (name == kDecalsFolder) {
       config.Set(name, config::Quote(value));
@@ -254,7 +264,7 @@ struct Draft {
       save_failed = true;
       return;
     }
-    bool decals_changed = false, tabs_changed = false;
+    bool decals_changed = false, tabs_changed = false, textures_changed = false;
     for (const auto& [name, value] : pending) {
       rex::cvar::SetFlagByName(name, value);
       REXLOG_INFO("Gameplay page: {} = {}", name, value);
@@ -265,11 +275,13 @@ struct Draft {
       if (name == kFastPostRace) SetFastPostRaceMode(value);
       decals_changed = decals_changed || name == kDecalsFolder || name == kAllSponsors;
       tabs_changed = tabs_changed || name == kModMenu;
+      textures_changed = textures_changed || IsTextureSetting(name);
     }
     if (decals_changed) {
       decals::SetSettings({REXCVAR_GET(fm4_custom_decals_folder), REXCVAR_GET(fm4_all_sponsor_decals)});
       decals::ApplyCustomDecals();
     }
+    if (textures_changed) track_textures::Apply();
     pending.clear();
     leave_warned = false;
     applied = true;
@@ -563,14 +575,44 @@ MenuRow AutoRestartRow(const std::shared_ptr<Draft>& draft) {
 MenuRow SignageRow(const std::shared_ptr<Draft>& draft) {
   MenuRow row;
   row.label = "TRACK SIGNAGE";
-  row.description =
-      "Your own pictures on the track's boards: choose a track, then a picture for each of its boards.";
-  row.value = [] { return std::string("OPEN"); };
+  row.description = "Your own pictures on the track's boards. A or ENTER opens them.";
+  row.value = [] {
+    const size_t shown = signage::ShownCount();
+    return shown ? "CUSTOM (" + std::to_string(shown) + (shown == 1 ? " BOARD)" : " BOARDS)") : std::string("DEFAULT");
+  };
   row.adjust = [draft](int direction) {
     if (direction > 0) draft->screen->OpenPage([] { return CreateSignagePage(); });
   };
   return row;
 }
+
+MenuRow TextureRow(const std::shared_ptr<Draft>& draft, const char* name, const char* label, const char* description,
+                   track_textures::Row which) {
+  using track_textures::Scale;
+  static constexpr Scale kSizes[] = {Scale::kDefault, Scale::k2x, Scale::k4x};
+  MenuRow row;
+  row.label = label;
+  row.description = description;
+  const auto index = [draft, name] {
+    const Scale now = track_textures::ParseScale(draft->Value(name)).value_or(Scale::kDefault);
+    return int(std::find(std::begin(kSizes), std::end(kSizes), now) - std::begin(kSizes));
+  };
+  row.value = [index] { return track_textures::ScaleLabel(kSizes[index()]); };
+  row.adjust = [draft, name, index](int direction) {
+    const int next = std::clamp(index() + std::clamp(direction, -1, 1), 0, 2);  // stops at its ends
+    draft->Change(name, std::string(track_textures::ScaleName(kSizes[next])));
+  };
+  row.note = [draft, name, which] {
+    if (draft->pending.contains(name)) {
+      return draft->Value(name) == "default" ? std::string() : std::string("Upscaled from your disc the first time.");
+    }
+    return track_textures::Note(which);
+  };
+  row.badge = [name] { return LaunchOptionBadge(name); };
+  row.unapplied = [draft, name] { return draft->pending.contains(name); };
+  return row;
+}
+
 
 MenuRow ModMenuRow(const std::shared_ptr<Draft>& draft) {
   MenuRow row;
@@ -615,6 +657,17 @@ void AddRow(std::vector<MenuRow>& rows, SettingRow setting, const std::shared_pt
     case SettingRow::kDecalsFolder: rows.push_back(DecalsFolderRow(draft, picked)); break;
     case SettingRow::kAllSponsors: rows.push_back(AllSponsorsRow(draft)); break;
     case SettingRow::kTrackSignage: rows.push_back(SignageRow(draft)); break;
+    case SettingRow::kTrackTextures:
+      rows.push_back(TextureRow(draft, kTrackTextures, "TRACK TEXTURES",
+                                "The track's textures, sharper. Hockenheimring for now.", track_textures::Row::kTrack));
+      break;
+    case SettingRow::kRoadSurface:
+      rows.push_back(TextureRow(draft, kRoadSurface, "ROAD SURFACE", "Just the road, sharper.",
+                                track_textures::Row::kRoad));
+      break;
+    case SettingRow::kGrassTexture:
+      rows.push_back(TextureRow(draft, kGrassTexture, "GRASS", "Just the grass, sharper.", track_textures::Row::kGrass));
+      break;
     case SettingRow::kModMenu: rows.push_back(ModMenuRow(draft)); break;
   }
 }
@@ -754,6 +807,15 @@ void ApplySavedGameplaySettings(const config::HostConfig& config) {
     }
   }
   for (const char* name : {kMuteNarrator, kHideOnlineItems, kAllSponsors, kModMenu}) ApplySavedBool(config, name);
+  for (const char* name : {kTrackTextures, kRoadSurface, kGrassTexture}) {
+    const auto value = config.Get(name);
+    if (!value || FromCommandLine(name)) continue;
+    if (track_textures::ParseScale(*value) && rex::cvar::SetFlagByName(name, *value)) {
+      REXLOG_INFO("Gameplay settings: {} = {}", name, *value);
+    } else {
+      REXLOG_WARN("Gameplay settings: ignored {} = {}", name, *value);
+    }
+  }
   if (const auto value = config.Get(kDecalsFolder); value && !FromCommandLine(kDecalsFolder)) {
     rex::cvar::SetFlagByName(kDecalsFolder, *value);
     REXLOG_INFO("Gameplay settings: {} = {}", kDecalsFolder, *value);

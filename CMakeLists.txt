@@ -61,6 +61,7 @@ set(FM4_HOST_SOURCES
     src/hardcore.cpp
     src/track_signage.cpp
     src/track_signage_runtime.cpp
+    src/track_textures.cpp
     src/car_dirt.cpp
     src/code_image_check.cpp
     src/shadow_map.cpp
@@ -138,6 +139,7 @@ if(FM4_BUILD_TESTS)
         tests/pointer_cursor_test.cpp
         tests/input_context_test.cpp
         tests/bc3_encoder_test.cpp
+        tests/track_textures_test.cpp
         tests/keycap_test.cpp
         tests/prompt_swap_test.cpp
         tests/prompt_strings_test.cpp
@@ -175,6 +177,7 @@ if(FM4_BUILD_TESTS)
         src/hardcore.cpp
         src/track_signage.cpp
         src/track_signage_runtime.cpp
+        src/track_textures.cpp
         src/game_language.cpp
         src/string_log.cpp
         src/config/host_config.cpp

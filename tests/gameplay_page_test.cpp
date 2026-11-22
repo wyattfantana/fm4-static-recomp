@@ -430,7 +430,7 @@ TEST_CASE("Every layout has every setting exactly once", "[gameplay_page]") {
         for (const SettingRow row : section.rows) ++count[row];
       }
     }
-    for (int row = 0; row <= int(SettingRow::kTrackSignage); ++row) CHECK(count[SettingRow(row)] == 1);
+    for (int row = 0; row <= int(SettingRow::kGrassTexture); ++row) CHECK(count[SettingRow(row)] == 1);
     // The switch is there only when it has a tab to show.
     CHECK(count[SettingRow::kModMenu] == (layout.mod.sections.empty() ? 0 : 1));
   }
